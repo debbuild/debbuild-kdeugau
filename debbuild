@@ -1,0 +1,29 @@
+#!/usr/bin/perl
+# debbuild script
+# Shamlessly steals intreface from rpm's "rpmbuild" to create
+# Debian packages.  Please note that such packages are highly
+# unlikely to conform to "Debian Policy".
+###
+# SVN revision info
+# $Date$
+# SVN revision $Rev$
+# Last update by $Author$
+###
+
+# User's prefs for dirs, environment, etc,etc,etc.
+# config file ~/.debmacros
+# Default ordered search paths for config/macros:
+# /usr/lib/rpm/rpmrc  /usr/lib/rpm/redhat/rpmrc  /etc/rpmrc      ~/.rpmrc
+# /usr/lib/rpm/macros /usr/lib/rpm/redhat/macros /etc/rpm/macros ~/.rpmmacros
+# **NOTE:  May be possible to (ab)use bits of debhelper
+
+# Build tree
+# default is /usr/src/debian/{BUILD,SOURCES,SPECS,DEBS,SDEBS}
+
+sub unpack(){}
+sub patch(){}
+sub configure(){}
+sub build(){}
+sub install(){}
+sub package(){}
+sub srcpackage(){}
