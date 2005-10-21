@@ -10,6 +10,11 @@
 # Last update by $Author$
 ###
 
+# Program flow:
+# -> Parse/execute "system" config/macros (if any - should be rare)
+# -> Parse/execute "user" config/macros (if any - *my* requirement is %_topdir)
+# -> Parse command line for options, spec file/tarball/.src.deb (NB - also accept .src.rpm)
+
 # User's prefs for dirs, environment, etc,etc,etc.
 # config file ~/.debmacros
 # Default ordered search paths for config/macros:
@@ -20,7 +25,79 @@
 # Build tree
 # default is /usr/src/debian/{BUILD,SOURCES,SPECS,DEBS,SDEBS}
 
+# Globals
+my $specfile;
+my $tarball;
+my $srcpkg;
+my $verbosity = 0;
+
+parse_cmd();
+
+## parse_cmd()
+# Parses command line into internal option (array|hash)
+# Options based on rpmbuild's options
+sub parse_cmd {
+  # Don't feel like coding my own option parser...
+  #use Getopt::Long;
+  # ... but I may have to:  (OTOH, rpm uses popt, so maybe we can too.)
+  #use Getopt::Popt qw(:all);
+
+  # Stuff it.
+  foreach (@ARGV) {
+    chomp;
+    # Is it an option?
+    if (/^-/) {
+      # Is it a long option?
+      if (/^--/) {
+	print "Long opt $_\n";
+      } else {
+	print "Short opt $_\n";
+      }
+    } else {
+      print "Non-option arg $_\n";
+    }
+  }
+  # Valid options, with example arguments (if any):
+# Build from .spec file; mutually exclusive:
+  # -bp
+  # -bc         
+  # -bi         
+  # -bl
+  # -ba
+  # -bb
+  # -bs
+# Build from tarball; mutually exclusive:
+  # -tp
+  # -tc
+  # -ti
+  # -ta
+  # -tb
+  # -ts
+# Build from .src.(deb|rpm)
+  # --rebuild
+  # --recompile
+
+# General options
+  # --buildroot=DIRECTORY
+  # --clean
+  # --nobuild
+  # --nodeps
+  # --nodirtokens
+  # --rmsource
+  # --rmspec
+  # --short-circuit
+  # --target=CPU-VENDOR-OS
+
+  #my $popt = new Getopt::Popt(argv => \@ARGV, options => \@optionsTable);
+
+} # end parse_cmd()
+
+## unpack()
+# Unpacks the tarball from the SOURCES directory to the BUILD directory.
+# Speaks gzip and bzip2.
+# Requires the "package name"
 sub unpack(){}
+
 sub patch(){}
 sub configure(){}
 sub build(){}
