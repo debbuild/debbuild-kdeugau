@@ -30,32 +30,110 @@ my $specfile;
 my $tarball;
 my $srcpkg;
 my $verbosity = 0;
+my %cmdopts = (type => '',
+		stage => 'a',
+		short => 'n'
+	);
+my %targets = ('p' => 'Prep',
+		'c' => 'Compile',
+		'i' => 'Install',
+		'l' => 'Verify %files',
+		'a' => 'Build binary and source',
+		'b' => 'Build binary',
+		's' => 'Build source'
+	);
+my $topdir = "/usr/src/debian";
 
+load_userconfig();
 parse_cmd();
 
+# Hokay.  Need to:
+# Execute prep if *not* --short-circuit
+prep() if ($cmdopts{short} ne 'y');
+
+if ($cmdopts{stage} =~ /ciab/) {
+  # Execute build if bc
+  # Execute build if bi, ba, bb and NOT --short-circuit
+  build() if ( ($cmdopts{stage} eq 'c') ||
+	(($cmdopts{stage} =~ /iab/) && ($cmdopts{short} ne 'y'))
+	);
+
+  # -> Execute 
+  install() if ($cmdopts{short} ne 'y');
+  binpackage();
+}
+
+srcpackage();
+
+
+
+# Just in case.
+exit 0;
+
+
+## load_userconfig()
+# Loads user configuration (if any)
+# Currently only handles .debmacros
+# Needs to handle "other files"
+sub load_userconfig {
+  (undef,undef,undef,undef,undef,undef,undef,$homedir,undef) = getpwuid($<);
+  if (-e "$homedir/.debmacros") {
+    open USERMACROS,"<$homedir/.debmacros";
+    while (<USERMACROS>) {
+      # And we also only handle the %_topdir macro at the moment.
+      if (/^\%_topdir/) {
+	(undef,$tmp) = split /\s+/, $_;
+      }
+    }
+  }
+} # end load_userconfig()
+
+
 ## parse_cmd()
-# Parses command line into internal option (array|hash)
+# Parses command line into global hash %cmdopts, other globals
 # Options based on rpmbuild's options
 sub parse_cmd {
   # Don't feel like coding my own option parser...
   #use Getopt::Long;
   # ... but I may have to:  (OTOH, rpm uses popt, so maybe we can too.)
   #use Getopt::Popt qw(:all);
+  # Or not.  >:(  Stupid Debian lack of findable Perl module names in packages.
 
   # Stuff it.
+  my $prevopt = '';
   foreach (@ARGV) {
     chomp;
+    $prevopt = $_;
     # Is it an option?
     if (/^-/) {
       # Is it a long option?
       if (/^--/) {
-	print "Long opt $_\n";
+	if (/^--short-circuit/) {
+	  $cmdopts{short} = 'y';
+	} else {
+	  print "Long opt $_\n";
+	}
       } else {
-	print "Short opt $_\n";
+	if (/^-[bts]/) {
+	  ($cmdopts{stage}) = (/^-[bts]([pcilabs])/);
+	  ($cmdopts{type}) = (/^-([bts])[pcilabs]/);
+	} elsif (/^-v/) {
+	  # bump verbosity.  Not sure what I'll actually do here...
+	} else {
+	  die "Bad option $_\n";
+	}
       }
     } else {
       print "Non-option arg $_\n";
     }
+  }
+
+  # Some cross-checks.  rpmbuild limits --short-circuit to just
+  # the "compile" and "install" targets - with good reason IMO.
+  # NB - this is NOT fatal, just ignored!
+  if ($cmdopts{short} eq 'y') {
+    warn "Can't use --short-circuit for $targets{$cmdopts{stage}} stage.  Ignoring.\n";
+    $cmdopts{short} = 'n';
   }
   # Valid options, with example arguments (if any):
 # Build from .spec file; mutually exclusive:
@@ -92,15 +170,19 @@ sub parse_cmd {
 
 } # end parse_cmd()
 
-## unpack()
+
+## prep()
 # Unpacks the tarball from the SOURCES directory to the BUILD directory.
 # Speaks gzip and bzip2.
 # Requires the "package name"
-sub unpack(){}
+# Finishes by applying patches in %prep section of spec file
+sub prep {
+  my $pkgname = shift;
+  
+} # end prep()
 
-sub patch(){}
-sub configure(){}
-sub build(){}
-sub install(){}
-sub package(){}
-sub srcpackage(){}
+
+sub build {}
+sub install {}
+sub binpackage {}
+sub srcpackage {}
