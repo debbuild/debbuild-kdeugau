@@ -10,6 +10,8 @@
 # Last update by $Author$
 ###
 
+use strict;
+
 # Program flow:
 # -> Parse/execute "system" config/macros (if any - should be rare)
 # -> Parse/execute "user" config/macros (if any - *my* requirement is %_topdir)
@@ -44,6 +46,18 @@ my %targets = ('p' => 'Prep',
 	);
 my $topdir = "/usr/src/debian";
 
+# Package data
+# This is the form of $pkgdata{pkgname}{meta}
+# meta includes Summary, Name, Version, Release, Group, Copyright,
+#	Source, URL, Packager, BuildRoot, Description
+my %pkgdata;
+
+# Functions
+sub prep;
+sub parse_spec;
+
+die "Not enough arguments\n" if #$argv == 0;
+
 load_userconfig();
 parse_cmd();
 
@@ -76,13 +90,14 @@ exit 0;
 # Currently only handles .debmacros
 # Needs to handle "other files"
 sub load_userconfig {
-  (undef,undef,undef,undef,undef,undef,undef,$homedir,undef) = getpwuid($<);
+  my (undef,undef,undef,undef,undef,undef,undef,$homedir,undef) = getpwuid($<);
   if (-e "$homedir/.debmacros") {
     open USERMACROS,"<$homedir/.debmacros";
     while (<USERMACROS>) {
       # And we also only handle the %_topdir macro at the moment.
       if (/^\%_topdir/) {
-	(undef,$tmp) = split /\s+/, $_;
+	my (undef,$tmp) = split /\s+/, $_;
+	$topdir = $tmp;
       }
     }
   }
@@ -110,13 +125,20 @@ sub parse_cmd {
       if (/^--/) {
 	if (/^--short-circuit/) {
 	  $cmdopts{short} = 'y';
+	} elsif (/^--rebuild/) {
+	  $cmdopts{type} = 's';
 	} else {
 	  print "Long opt $_\n";
 	}
       } else {
-	if (/^-[bts]/) {
-	  ($cmdopts{stage}) = (/^-[bts]([pcilabs])/);
-	  ($cmdopts{type}) = (/^-([bts])[pcilabs]/);
+	if (/^-[bt]/) {
+	  if ($cmdopts{stage} eq 's') {
+	    # Mutually exclusive options.
+	    die "Can't use $_ with --rebuild\n";
+	  } else {
+	    ($cmdopts{stage}) = (/^-[bt]([pcilabs])/);
+	    ($cmdopts{type}) = (/^-([bt])[pcilabs]/);
+	  }
 	} elsif (/^-v/) {
 	  # bump verbosity.  Not sure what I'll actually do here...
 	} else {
@@ -124,7 +146,25 @@ sub parse_cmd {
 	}
       }
     } else {
-      print "Non-option arg $_\n";
+      # --buildroot is the only option that takes an argument
+      # Therefore, any *other* bare arguments are the spec file,
+      # tarball, or source package we're operating on - depending
+      # on which one we meet.
+      if ($prevopt eq '--buildroot') {
+	# Set buildroot
+      } else {
+	if ($cmdopts{type} eq 's') {
+	  # Source package
+	  if (!/\.src\.(deb|rpm)$/) {
+	    die "Can't --rebuild with $_\n";
+	  }
+	} elsif ($cmdopts{type} eq 'b') {
+	  $specfile = $_;
+	  # Spec file
+	} else {
+	  # Tarball
+	}
+      }
     }
   }
 
@@ -174,15 +214,91 @@ sub parse_cmd {
 ## prep()
 # Unpacks the tarball from the SOURCES directory to the BUILD directory.
 # Speaks gzip and bzip2.
-# Requires the "package name"
 # Finishes by applying patches in %prep section of spec file
 sub prep {
-  my $pkgname = shift;
-  
+  if ($cmdopts{type} eq 'b') {
+    # Need to read the spec file to find the tarball
+    parse_spec();
+
+    # Need to find the filename part of the tarball.  In theory, we
+    # could go out to the URL and retrieve it, but that's Messy.
+# want to make this local
+    $pkgdata{main}{source} =~ s|.+/([^/]+)$|$1|;
+
+    if ($pkgdata{main}{source} =~ /(.+)\.tar\.gz$/) {
+      -e "$topdir/BUILD/$1" && system "rm -rf $topdir/BUILD/$1";
+      system "cd $topdir/BUILD;tar -zxvf $topdir/SOURCES/$pkgdata{main}{source}";
+    } elsif ($pkgdata{main}{source} =~ /(.+)\.tar\.bz2$/) {
+      -e "$topdir/BUILD/$1" && system "rm -rf $topdir/BUILD/$1";
+      system "cd $topdir/BUILD;tar -jxvf $topdir/SOURCES/$pkgdata{main}{source}";
+    } else {
+      die "Unknown source tarball format\n";
+    }
+    # And now for patches.  (not)
+  }
 } # end prep()
 
 
-sub build {}
+## parse_spec()
+# Parse the .spec file once we've.... uh....
+sub parse_spec {
+  open SPECFILE,"<$specfile";
+
+  while (<SPECFILE>) {
+    next if /^#/;
+    next if /^\s+$/;
+    if (/^\%/) {
+      # A macro that needs further processing.
+      if (/^\%build/) {
+	# %build.  This is pretty much just a shell script.
+      }
+    } else {
+      if (/^summary:\s+(.+)/i) {
+	$pkgdata{main}{summary} = $1;
+      } elsif (/^name:\s+(.+)/i) {
+	$pkgdata{main}{name} = $1;
+      } elsif (/^version:\s+(.+)/i) {
+	$pkgdata{main}{version} = $1;
+      } elsif (/^release:\s+(.+)/i) {
+	$pkgdata{main}{release} = $1;
+      } elsif (/^group:\s+(.+)/i) {
+	$pkgdata{main}{group} = $1;
+      } elsif (/^copyright:\s+(.+)/i) {
+	$pkgdata{main}{copyright} = $1;
+      } elsif (/^url:\s+(.+)/i) {
+	$pkgdata{main}{url} = $1;
+      } elsif (/^packager:\s+(.+)/i) {
+	$pkgdata{main}{packager} = $1;
+      } elsif (/^source:\s+(.+)/i) {
+	$pkgdata{main}{source} = $1;
+      }
+#Name: suwrap
+#Version: 0.04
+#Release: 3
+#Group: Applications/System
+#Copyright: WebHart internal ONLY.  :(
+#BuildArchitectures: i386
+#BuildRoot: /tmp/%{name}-%{version}
+#Url: http://virtual.webhart.net
+#Packager: Kris Deugau <kdeugau@deepnet.cx>
+#Source: ftp://virtual.webhart.net/%{name}-%{version}.tar.gz
+
+    }
+  }
+  # Parse and replace macros in $pkgdata{}{}
+  # Start with the ones I use
+  $pkgdata{main}{source} =~ s/\%\{name\}/$pkgdata{main}{name}/;
+  $pkgdata{main}{source} =~ s/\%\{version\}/$pkgdata{main}{version}/;
+} # end parse_spec()
+
+
+## build()
+# Execute commands provided as a shell script.  It may prove simpler
+# to do as rpm does and actually create a little shell script.
+sub build {
+} # end build()
+
+
 sub install {}
 sub binpackage {}
 sub srcpackage {}
