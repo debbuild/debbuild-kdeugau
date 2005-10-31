@@ -11,6 +11,7 @@
 ###
 
 use strict;
+use warnings;
 
 # Program flow:
 # -> Parse/execute "system" config/macros (if any - should be rare)
@@ -31,11 +32,16 @@ use strict;
 my $specfile;
 my $tarball;
 my $srcpkg;
+
+# Initialized globals
 my $verbosity = 0;
 my %cmdopts = (type => '',
 		stage => 'a',
 		short => 'n'
 	);
+my $topdir = "/usr/src/debian";
+
+# "Constants"
 my %targets = ('p' => 'Prep',
 		'c' => 'Compile',
 		'i' => 'Install',
@@ -44,13 +50,40 @@ my %targets = ('p' => 'Prep',
 		'b' => 'Build binary',
 		's' => 'Build source'
 	);
-my $topdir = "/usr/src/debian";
+my $scriptletbase =
+q(#!/bin/sh
+
+  RPM_SOURCE_DIR="%{_topdir}/SOURCES"
+  RPM_BUILD_DIR="%{_topdir}/BUILD"
+  RPM_OPT_FLAGS="-O2 -g -march=i386 -mcpu=i686"
+  RPM_ARCH="i386"
+  RPM_OS="linux"
+  export RPM_SOURCE_DIR RPM_BUILD_DIR RPM_OPT_FLAGS RPM_ARCH RPM_OS
+  RPM_DOC_DIR="/usr/share/doc"
+  export RPM_DOC_DIR
+  RPM_PACKAGE_NAME="%{name}"
+  RPM_PACKAGE_VERSION="%{version}"
+  RPM_PACKAGE_RELEASE="%{release}"
+  export RPM_PACKAGE_NAME RPM_PACKAGE_VERSION RPM_PACKAGE_RELEASE
+  RPM_BUILD_ROOT="%{buildroot}"
+  export RPM_BUILD_ROOT
+
+  set -x
+  umask 022
+  cd %{_topdir}/BUILD
+);
 
 # Package data
 # This is the form of $pkgdata{pkgname}{meta}
 # meta includes Summary, Name, Version, Release, Group, Copyright,
 #	Source, URL, Packager, BuildRoot, Description
+# 10/31/2005 Maybe this should be flatter?  -kgd
 my %pkgdata;
+
+# Scriptlets
+my $prepscript;
+my $buildscript;
+my $installscript;
 
 # Functions
 sub prep;
@@ -227,10 +260,10 @@ sub prep {
 
     if ($pkgdata{main}{source} =~ /(.+)\.tar\.gz$/) {
       -e "$topdir/BUILD/$1" && system "rm -rf $topdir/BUILD/$1";
-      system "cd $topdir/BUILD;tar -zxvf $topdir/SOURCES/$pkgdata{main}{source}";
+#      system "cd $topdir/BUILD;tar -zxvvf $topdir/SOURCES/$pkgdata{main}{source}";
     } elsif ($pkgdata{main}{source} =~ /(.+)\.tar\.bz2$/) {
       -e "$topdir/BUILD/$1" && system "rm -rf $topdir/BUILD/$1";
-      system "cd $topdir/BUILD;tar -jxvf $topdir/SOURCES/$pkgdata{main}{source}";
+      system "cd $topdir/BUILD;tar -jxvvf $topdir/SOURCES/$pkgdata{main}{source}";
     } else {
       die "Unknown source tarball format\n";
     }
@@ -244,13 +277,71 @@ sub prep {
 sub parse_spec {
   open SPECFILE,"<$specfile";
 
-  while (<SPECFILE>) {
+LINE: while (<SPECFILE>) {
     next if /^#/;
     next if /^\s+$/;
     if (/^\%/) {
       # A macro that needs further processing.
+      if (/^\%prep/) {
+	# %prep section.  May have %setup macro;  may include %patch tags,
+	# may be just a bare shell script.
+
+	# This really should be local-ish, but we need just the filename for the source
+	$pkgdata{main}{source} =~ s|.+/([^/]+)$|$1|;
+
+	# Replace some core macros
+	$pkgdata{main}{source} =~ s/\%\{name\}/$pkgdata{main}{name}/;
+	$pkgdata{main}{source} =~ s/\%\{version\}/$pkgdata{main}{version}/;
+
+PREPSCRIPT: while (<SPECFILE>) {
+	  if (/^\%setup/) {
+	    # Parse out the %setup macro.  Note that we aren't supporting
+	    # most of RPM's %setup features.
+	    $prepscript .= "cd $topdir/BUILD\n".
+		( /\s+-n\s+([^\s]+)\s+/ ?
+		  "rm -rf $1\n" : "rm -rf $pkgdata{main}{name}-$pkgdata{main}{version}\n" ).
+		"tar -".
+		( $pkgdata{main}{source} =~ /\.tar\.gz$/ ? "z" : "" ).
+		( $pkgdata{main}{source} =~ /\.tar\.bz2$/ ? "j" : "" ).
+		"x".( /\s+-q\s+/ ? '' : 'vv' )."f ".
+		"$topdir/SOURCES/$pkgdata{main}{source}\n".
+		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n).
+		( /\s+-n\s+([^\s]+)\s+/ ?
+		  "cd $1\n" : "cd $pkgdata{main}{name}-$pkgdata{main}{version}\n" ).
+		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
+		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
+		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
+	  } elsif (/^\%patch/) {
+	    print "patch macro\n";
+	  } else {
+	    last PREPSCRIPT if /^\%/;
+	    $prepscript .= $_;
+	  }
+	}
+	redo LINE;
+      }
       if (/^\%build/) {
-	# %build.  This is pretty much just a shell script.
+	# %build.  This is pretty much just a shell script.  There
+	# *are* a few macros, but we're not going to deal with them yet.
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $buildscript .= $_;
+	}
+      }
+      if (/^\%install/) {
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $installscript .= $_;
+	}
+      }
+      if (/^\%clean/) {
+      }
+      if (/^\%post/) {
+      }
+      if (/^\%preun/) {
+      }
+      if (/^\%files/) {
+	# Danger! Danger!
       }
     } else {
       if (/^summary:\s+(.+)/i) {
@@ -271,6 +362,7 @@ sub parse_spec {
 	$pkgdata{main}{packager} = $1;
       } elsif (/^source:\s+(.+)/i) {
 	$pkgdata{main}{source} = $1;
+	die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
       }
 #Name: suwrap
 #Version: 0.04
