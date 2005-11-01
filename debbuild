@@ -271,6 +271,14 @@ LINE: while (<SPECFILE>) {
     next if /^\s+$/;
     if (/^\%/) {
       # A macro that needs further processing.
+      if (/^\%description/) {
+	$pkgdata{main}{desc} .= $_;
+        while (<SPECFILE>) {
+          redo LINE if /^\%/;
+          $pkgdata{main}{desc} .= " $_";
+        }
+
+      }
       if (/^\%prep/) {
 	# %prep section.  May have %setup macro;  may include %patch tags,
 	# may be just a bare shell script.
@@ -395,6 +403,10 @@ PREPSCRIPT: while (<SPECFILE>) {
   $scriptletbase =~ s/\%\{version\}/$pkgdata{main}{version}/g;
   $scriptletbase =~ s/\%\{release\}/$pkgdata{main}{release}/g;
 
+# Some more macro substitution.  Nrgh.
+  $buildroot =~ s/\%\{name\}/$pkgdata{main}{name}/g;
+  $buildroot =~ s/\%\{version\}/$pkgdata{main}{version}/g;
+  $buildroot =~ s/\%\{release\}/$pkgdata{main}{release}/g;
 } # end parse_spec()
 
 
@@ -467,5 +479,66 @@ sub install {
 } # end install()
 
 
-sub binpackage {}
+## binpackage()
+# Creates the binary .deb package from the installed tree in $buildroot.
+sub binpackage {
+  # Gotta do this first, otherwise the control file has nowhere to go.  >:(
+eval {
+  mkdir "$buildroot/DEBIAN";
+};
+die $@ if $@;
+
+  # create script filename
+  my $debscriptfile = "/var/tmp/deb-tmp.pkg.".int(rand(99998)+1);
+  sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
+	or die $!;
+  print DEBSCRIPT $scriptletbase;
+  print DEBSCRIPT "tree $buildroot\n".
+	"mkdir $topdir/DEBS/i386\n".
+	"dpkg-deb -b $buildroot $topdir/DEBS/i386/$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
+
+  close DEBSCRIPT;
+
+  my $control = "Package: $pkgdata{main}{name}\n".
+	"Version: $pkgdata{main}{version}-$pkgdata{main}{release}\n".
+	"Section: unknown\n".
+	"Priority: optional\n".
+	"Architecture: i386\n".
+	"Maintainer: $pkgdata{main}{packager}\n".
+	"Description: $pkgdata{main}{desc}\n";
+
+eval {
+  open CONTROL, ">$buildroot/DEBIAN/control";
+  print CONTROL $control;
+  close CONTROL;
+};
+if ($@) {
+  print $@;
+}
+
+#Package: httpd
+#Version: 2.0.54-7via
+#Section: unknown
+#Priority: optional
+#Architecture: i386
+#Depends: libc6 (>= 2.3.2.ds1-21), libdb4.2, libexpat1 (>= 1.95.8), libssl0.9.7, libapr0
+#Replaces: apache2
+#Installed-Size: 3076
+#Maintainer: Kris Deugau <kdeugau@vianet.ca>
+#Description: apache2 for ViaNet
+# apache2 for ViaNet.  Includes per-vhost setuid patches from
+# http://home.samfundet.no/~sesse/mpm-itk/.
+
+
+  # execute
+  print "Creating .deb for $pkgdata{main}{name}...\n";
+  system("/bin/sh -e $debscriptfile") == 0
+	or die "Can't exec: $!\nalso: $?";
+
+  # and clean up
+  unlink $debscriptfile;
+
+} # end binpackage()
+
+
 sub srcpackage {}
