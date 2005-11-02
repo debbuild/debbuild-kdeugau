@@ -482,11 +482,13 @@ sub install {
 ## binpackage()
 # Creates the binary .deb package from the installed tree in $buildroot.
 sub binpackage {
+  # Some checks on the .deb file location
+  if (!-e "$topdir/DEBS/i386") {
+#	"if [ -e $topdir/DEBS/i386 ]; then\n\tmkdir $topdir/DEBS/i386\nfi\n".
+    mkdir "$topdir/DEBS/i386";
+  }
   # Gotta do this first, otherwise the control file has nowhere to go.  >:(
-eval {
   mkdir "$buildroot/DEBIAN";
-};
-die $@ if $@;
 
   # create script filename
   my $debscriptfile = "/var/tmp/deb-tmp.pkg.".int(rand(99998)+1);
@@ -494,8 +496,7 @@ die $@ if $@;
 	or die $!;
   print DEBSCRIPT $scriptletbase;
   print DEBSCRIPT "tree $buildroot\n".
-	"mkdir $topdir/DEBS/i386\n".
-	"dpkg-deb -b $buildroot $topdir/DEBS/i386/$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
+	"fakeroot dpkg-deb -b $buildroot $topdir/DEBS/i386/$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
 
   close DEBSCRIPT;
 
