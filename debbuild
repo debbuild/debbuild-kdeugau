@@ -14,6 +14,9 @@ use strict;
 use warnings;
 use Fcntl;	# for sysopen flags
 
+# regex debugger
+#use re "debug";
+
 # Program flow:
 # -> Parse/execute "system" config/macros (if any - should be rare)
 # -> Parse/execute "user" config/macros (if any - *my* requirement is %_topdir)
@@ -71,7 +74,16 @@ q(#!/bin/sh
   export RPM_PACKAGE_NAME RPM_PACKAGE_VERSION RPM_PACKAGE_RELEASE
   RPM_BUILD_ROOT="%{buildroot}"
   export RPM_BUILD_ROOT
-
+);
+#my $tmp = `dpkg-architecture`;	# Debian buildarch goop.
+#$tmp =~ s/^(.*)$/  $1/g;
+#print $tmp;
+foreach (`dpkg-architecture`) {
+  s/=(.+)/="$1"/;
+  $scriptletbase .= "  $_";
+}
+$scriptletbase .=
+q(
   set -x
   umask 022
   cd %{_topdir}/BUILD
@@ -221,7 +233,7 @@ sub parse_cmd {
   # Some cross-checks.  rpmbuild limits --short-circuit to just
   # the "compile" and "install" targets - with good reason IMO.
   # NB - this is NOT fatal, just ignored!
-  if ($cmdopts{short} eq 'y') {
+  if ($cmdopts{short} eq 'y' && $cmdopts{stage} =~ /[labs]/) {
     warn "Can't use --short-circuit for $targets{$cmdopts{stage}} stage.  Ignoring.\n";
     $cmdopts{short} = 'n';
   }
@@ -311,8 +323,8 @@ PREPSCRIPT: while (<SPECFILE>) {
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
 		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
-	  } elsif (/^\%patch/) {
-	    print "patch macro\n";
+	  } elsif (/^\%patch([^:]+)\s+(.+)$/) {
+	    $prepscript .= "patch $2 <$topdir/SOURCES/".$pkgdata{main}{"patch$1"}."\n";
 	  } else {
 	    last PREPSCRIPT if /^\%/;
 	    $prepscript .= $_;
@@ -320,18 +332,26 @@ PREPSCRIPT: while (<SPECFILE>) {
 	}
 	redo LINE;
       }
-      if (/^\%build/) {
+	if (/^\%build/) {
 	# %build.  This is pretty much just a shell script.  There
 	# *are* a few macros, but we're not going to deal with them yet.
 	$buildscript .= "cd $tarballdir\n";
-	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
-	  $buildscript .= $_;
+BUILDSCRIPT: while (<SPECFILE>) {
+	  if (/^\%configure/) {
+	    my $tmp = expandmacros($_,'configure');
+	    $buildscript .= $tmp;
+	  } else {
+	# Need to handle %make
+	    last BUILDSCRIPT if /^\%/;
+	    $buildscript .= $_;
+	  }
 	}
+	redo LINE;
       }
       if (/^\%install/) {
 	$installscript .= "cd $tarballdir\n";
 	while (<SPECFILE>) {
+	# Need to handle %makeinstall
 	  redo LINE if /^\%/;
 	  $installscript .= $_;
 	}
@@ -371,6 +391,8 @@ PREPSCRIPT: while (<SPECFILE>) {
       } elsif (/^source:\s+(.+)/i) {
 	$pkgdata{main}{source} = $1;
 	die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
+      } elsif (/^patch([^:]+):\s+(.+)$/i) {
+	$pkgdata{main}{"patch$1"} = $2;
       }
 #Name: suwrap
 #Version: 0.04
@@ -390,23 +412,12 @@ PREPSCRIPT: while (<SPECFILE>) {
 #  $pkgdata{main}{source} =~ s/\%\{name\}/$pkgdata{main}{name}/;
 #  $pkgdata{main}{source} =~ s/\%\{version\}/$pkgdata{main}{version}/;
 
-# Scriptlet core.  Use /g to make sure all occurrences get tweaked.
-  # "real" globals (apply to all packages the same way)
-  $scriptletbase =~ s/\%\{_topdir\}/$topdir/g;
+  # Expand macros as necessary.
+  $scriptletbase = expandmacros($scriptletbase,'globals');
 
-  # "fake" globals (may be tweaked by package)
   $buildroot = $cmdbuildroot if $cmdbuildroot;
-  $scriptletbase =~ s/\%\{buildroot\}/$buildroot/g;
+  $buildroot = expandmacros($buildroot,'pkgdata');
 
-  # sub-package(compatible) stuff
-  $scriptletbase =~ s/\%\{name\}/$pkgdata{main}{name}/g;
-  $scriptletbase =~ s/\%\{version\}/$pkgdata{main}{version}/g;
-  $scriptletbase =~ s/\%\{release\}/$pkgdata{main}{release}/g;
-
-# Some more macro substitution.  Nrgh.
-  $buildroot =~ s/\%\{name\}/$pkgdata{main}{name}/g;
-  $buildroot =~ s/\%\{version\}/$pkgdata{main}{version}/g;
-  $buildroot =~ s/\%\{release\}/$pkgdata{main}{release}/g;
 } # end parse_spec()
 
 
@@ -415,23 +426,24 @@ PREPSCRIPT: while (<SPECFILE>) {
 # Speaks gzip and bzip2.
 # Finishes by applying patches in %prep section of spec file
 sub prep {
-  {
-    # create script filename
-    my $prepscriptfile = "/var/tmp/deb-tmp.prep.".int(rand(99998)+1);
-    sysopen(PREPSCRIPT, $prepscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
-	or die $!;
-    print PREPSCRIPT $scriptletbase;
-    print PREPSCRIPT $prepscript;
-    close PREPSCRIPT;
+  # Replace some things here just to make sure.
+  $prepscript =~ s/\%\{name\}/$pkgdata{main}{name}/g;
 
-    # execute
-    print "Calling \%prep script $prepscriptfile...\n";
-    system("/bin/sh -e $prepscriptfile") == 0
+  # create script filename
+  my $prepscriptfile = "/var/tmp/deb-tmp.prep.".int(rand(99998)+1);
+  sysopen(PREPSCRIPT, $prepscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
+	or die $!;
+  print PREPSCRIPT $scriptletbase;
+  print PREPSCRIPT $prepscript;
+  close PREPSCRIPT;
+
+  # execute
+  print "Calling \%prep script $prepscriptfile...\n";
+  system("/bin/sh -e $prepscriptfile") == 0
 	or die "Can't exec: $!\nalso: $?";
 
-    # and clean up
-    unlink $prepscriptfile;
-  }
+  # and clean up
+  unlink $prepscriptfile;
 } # end prep()
 
 
@@ -444,9 +456,13 @@ sub build {
   sysopen(BUILDSCRIPT, $buildscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
   print BUILDSCRIPT $scriptletbase;
+
+  $buildscript = expandmacros($buildscript,'configure');
   print BUILDSCRIPT $buildscript;
   close BUILDSCRIPT;
 
+#print "'$scriptletbase$buildscript'";
+#exit 0;
   # execute
   print "Calling \%build script $buildscriptfile...\n";
   system("/bin/sh -e $buildscriptfile") == 0
@@ -543,3 +559,76 @@ if ($@) {
 
 
 sub srcpackage {}
+
+
+## expandmacros()
+# Expands all %{blah} macros in the passed string
+sub expandmacros {
+  my $macrostring = shift;
+  my $section = shift;	# We'll want to split things up a bit eventually.
+
+  if ($section eq 'configure') {
+    # %configure-ish macros
+    # Note that these are processed in reverse order to get the substitution order right
+    # Foistly, %configure itself:
+# Don't know what it's for, don't have a useful default replacement
+# 	--program-prefix=%{_program_prefix} \
+# Coding Q:  Why does this not work if I move the subst string into its own isolated quotes?
+    $macrostring =~ s'%configure'./configure --host=$DEB_HOST_GNU_TYPE \
+	--build=$DEB_BUILD_GNU_TYPE \
+	--prefix=%{_prefix} \
+	--exec-prefix=%{_exec_prefix} \
+	--bindir=%{_bindir} \
+	--sbindir=%{_sbindir} \
+	--sysconfdir=%{_sysconfdir} \
+	--datadir=%{_datadir} \
+	--includedir=%{_includedir} \
+	--libdir=%{_libdir} \
+	--libexecdir=%{_libexecdir} \
+	--localstatedir=%{_localstatedir} \
+	--sharedstatedir=%{_sharedstatedir} \
+	--mandir=%{_mandir} \
+	--infodir=%{_infodir} ';
+
+    # Note that the above regex terminates with the extra space
+    # "Just In Case" of user additions to the %configure line,
+    # which will then get neatly tagged on the end where they
+    # take precedence (supposedly) over the "default" ones.
+
+    $macrostring =~ s'%{_mandir}'%{_prefix}/man'g;
+    $macrostring =~ s'%{_infodir}'%{_prefix}/info'g;
+    $macrostring =~ s'%{_oldincludedir}'/usr/include'g;
+    $macrostring =~ s'%{_includedir}'%{_prefix}/include'g;
+    $macrostring =~ s'%{_libdir}'%{_exec_prefix}/%{_lib}'g;
+    $macrostring =~ s'%{_lib}'lib'g;
+    $macrostring =~ s'%{_localstatedir}'%{_prefix}/var'g;
+    $macrostring =~ s'%{_sharedstatedir}'%{_prefix}/com'g;
+    $macrostring =~ s'%{_sysconfdir}'%{_prefix}/etc'g;
+    $macrostring =~ s'%{_datadir}'%{_prefix}/share'g;
+    $macrostring =~ s'%{_libexecdir}'%{_exec_prefix}/libexec'g;
+    $macrostring =~ s'%{_sbindir}'%{_exec_prefix}/sbin'g;
+    $macrostring =~ s'%{_bindir}'%{_exec_prefix}/bin'g;
+    $macrostring =~ s'%{_exec_prefix}'%{_prefix}'g;
+    $macrostring =~ s'%{_prefix}'/usr'g;
+  } # done with config section
+
+  if ($section eq 'globals') {
+    $macrostring =~ s/\%\{_topdir\}/$topdir/g;
+
+    # "fake" globals (may be tweaked by package)
+    $macrostring =~ s/\%\{buildroot\}/$buildroot/g;
+
+    # sub-package(compatible) stuff
+    $macrostring =~ s/\%\{name\}/$pkgdata{main}{name}/g;
+    $macrostring =~ s/\%\{version\}/$pkgdata{main}{version}/g;
+    $macrostring =~ s/\%\{release\}/$pkgdata{main}{release}/g;
+  } # done with globals section
+
+  if ($section eq 'pkgdata') {
+    $macrostring =~ s/\%\{name\}/$pkgdata{main}{name}/g;
+    $macrostring =~ s/\%\{version\}/$pkgdata{main}{version}/g;
+    $macrostring =~ s/\%\{release\}/$pkgdata{main}{release}/g;
+  }
+
+  return $macrostring;
+} # end expandmacros()
