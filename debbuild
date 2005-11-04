@@ -338,7 +338,7 @@ PREPSCRIPT: while (<SPECFILE>) {
 	$buildscript .= "cd $tarballdir\n";
 BUILDSCRIPT: while (<SPECFILE>) {
 	  if (/^\%configure/) {
-	    my $tmp = expandmacros($_,'configure');
+	    my $tmp = expandmacros($_,'cg');
 	    $buildscript .= $tmp;
 	  } else {
 	# Need to handle %make
@@ -413,10 +413,10 @@ BUILDSCRIPT: while (<SPECFILE>) {
 #  $pkgdata{main}{source} =~ s/\%\{version\}/$pkgdata{main}{version}/;
 
   # Expand macros as necessary.
-  $scriptletbase = expandmacros($scriptletbase,'globals');
+  $scriptletbase = expandmacros($scriptletbase,'g');
 
   $buildroot = $cmdbuildroot if $cmdbuildroot;
-  $buildroot = expandmacros($buildroot,'pkgdata');
+  $buildroot = expandmacros($buildroot,'pg');
 
 } # end parse_spec()
 
@@ -457,7 +457,7 @@ sub build {
 	or die $!;
   print BUILDSCRIPT $scriptletbase;
 
-  $buildscript = expandmacros($buildscript,'configure');
+  $buildscript = expandmacros($buildscript,'cg');
   print BUILDSCRIPT $buildscript;
   close BUILDSCRIPT;
 
@@ -567,7 +567,7 @@ sub expandmacros {
   my $macrostring = shift;
   my $section = shift;	# We'll want to split things up a bit eventually.
 
-  if ($section eq 'configure') {
+  if ($section =~ /c/) {
     # %configure-ish macros
     # Note that these are processed in reverse order to get the substitution order right
     # Foistly, %configure itself:
@@ -612,7 +612,7 @@ sub expandmacros {
     $macrostring =~ s'%{_prefix}'/usr'g;
   } # done with config section
 
-  if ($section eq 'globals') {
+  if ($section =~ /g/) {
     $macrostring =~ s/\%\{_topdir\}/$topdir/g;
 
     # "fake" globals (may be tweaked by package)
@@ -624,7 +624,7 @@ sub expandmacros {
     $macrostring =~ s/\%\{release\}/$pkgdata{main}{release}/g;
   } # done with globals section
 
-  if ($section eq 'pkgdata') {
+  if ($section =~ /p/) {
     $macrostring =~ s/\%\{name\}/$pkgdata{main}{name}/g;
     $macrostring =~ s/\%\{version\}/$pkgdata{main}{version}/g;
     $macrostring =~ s/\%\{release\}/$pkgdata{main}{release}/g;
