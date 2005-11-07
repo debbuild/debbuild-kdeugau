@@ -75,9 +75,6 @@ q(#!/bin/sh
   RPM_BUILD_ROOT="%{buildroot}"
   export RPM_BUILD_ROOT
 );
-#my $tmp = `dpkg-architecture`;	# Debian buildarch goop.
-#$tmp =~ s/^(.*)$/  $1/g;
-#print $tmp;
 foreach (`dpkg-architecture`) {
   s/=(.+)/="$1"/;
   $scriptletbase .= "  $_";
@@ -102,10 +99,6 @@ my $buildscript;
 my $installscript;
 my $cleanscript;
 
-# Functions
-sub prep;
-sub parse_spec;
-
 die "Not enough arguments\n" if #$argv == 0;
 
 # Snag some environment data
@@ -128,23 +121,28 @@ if ($cmdopts{type} eq 'b') {
 }
 
 # Hokay.  Need to:
-# Execute prep if *not* --short-circuit
+# -> prep if -.p OR (-.[cilabs] AND !--short-circuit)
 if ($cmdopts{stage} eq 'p' || ($cmdopts{stage} =~ /[cilabs]/ && $cmdopts{short} ne 'y')) {
   prep();
 }
+# -> build if -.c OR (-.[ilabs] AND !--short-circuit)
 if ($cmdopts{stage} eq 'c' || ($cmdopts{stage} =~ /[ilabs]/ && $cmdopts{short} ne 'y')) {
   build();
 }
+# -> install if -.[ilabs]
 if ($cmdopts{stage} =~ /[ilabs]/) {
   install();
 }
+# -> binpkg and srcpkg if -.a
 if ($cmdopts{stage} eq 'a') {
   binpackage();
   srcpackage();
 }
+# -> binpkg if -.b
 if ($cmdopts{stage} eq 'b') {
   binpackage();
 }
+# -> srcpkg if -.s
 if ($cmdopts{stage} eq 's') {
   srcpackage();
 }
@@ -200,11 +198,13 @@ sub parse_cmd {
 	  print "Long opt $_\n";
 	}
       } else {
+	# Not a long option
 	if (/^-[bt]/) {
 	  if ($cmdopts{stage} eq 's') {
 	    # Mutually exclusive options.
 	    die "Can't use $_ with --rebuild\n";
 	  } else {
+	    # Capture the type (from "bare" files or tarball) and the stage (prep, build, etc)
 	    ($cmdopts{stage}) = (/^-[bt]([pcilabs])/);
 	    ($cmdopts{type}) = (/^-([bt])[pcilabs]/);
 	  }
@@ -214,7 +214,9 @@ sub parse_cmd {
 	  die "Bad option $_\n";
 	}
       }
-    } else {
+
+    } else { # Not an option argument
+
       # --buildroot is the only option that takes an argument
       # Therefore, any *other* bare arguments are the spec file,
       # tarball, or source package we're operating on - depending
@@ -240,11 +242,13 @@ sub parse_cmd {
 
   # Some cross-checks.  rpmbuild limits --short-circuit to just
   # the "compile" and "install" targets - with good reason IMO.
+  # Note that --short-circuit with -.p is not really an error, just redundant.
   # NB - this is NOT fatal, just ignored!
   if ($cmdopts{short} eq 'y' && $cmdopts{stage} =~ /[labs]/) {
     warn "Can't use --short-circuit for $targets{$cmdopts{stage}} stage.  Ignoring.\n";
     $cmdopts{short} = 'n';
   }
+
   # Valid options, with example arguments (if any):
 # Build from .spec file; mutually exclusive:
   # -bp
@@ -282,15 +286,17 @@ sub parse_cmd {
 
 
 ## parse_spec()
-# Parse the .spec file once we've.... uh....
+# Parse the .spec file.
 sub parse_spec {
   open SPECFILE,"<$specfile";
 
 LINE: while (<SPECFILE>) {
-    next if /^#/;
-    next if /^\s+$/;
+    next if /^#/;	# Ignore comments...
+    next if /^\s+$/;	# ... and blank lines.
+
     if (/^\%/) {
       # A macro that needs further processing.
+
       if (/^\%description/) {
 	$pkgdata{main}{desc} .= $_;
         while (<SPECFILE>) {
@@ -307,13 +313,12 @@ LINE: while (<SPECFILE>) {
 	$pkgdata{main}{source} =~ s|.+/([^/]+)$|$1|;
 
 	# Replace some core macros
-	$pkgdata{main}{source} =~ s/\%\{name\}/$pkgdata{main}{name}/;
-	$pkgdata{main}{source} =~ s/\%\{version\}/$pkgdata{main}{version}/;
+	$pkgdata{main}{source} = expandmacros($pkgdata{main}{source},'gp');
 
 PREPSCRIPT: while (<SPECFILE>) {
 	  if (/^\%setup/) {
 	    # Parse out the %setup macro.  Note that we aren't supporting
-	    # most of RPM's %setup features.
+	    # many of RPM's %setup features.
 	    $prepscript .= "cd $topdir/BUILD\n";
 	    if ( /\s+-n\s+([^\s]+)\s+/ ) {
 	      $tarballdir = $1;
@@ -361,9 +366,6 @@ BUILDSCRIPT: while (<SPECFILE>) {
 INSTALLSCRIPT: while (<SPECFILE>) {
 	  if (/^\%makeinstall/) {
             $installscript .= expandmacros($_,'igbp');
-print $installscript;
-#print "\n$tmp\n"; die;
-#            $installscript .= $tmp;
           } else {
             last INSTALLSCRIPT if /^\%/;
             $installscript .= $_;
@@ -385,7 +387,9 @@ print $installscript;
       if (/^\%files/) {
 	# Danger! Danger!
       }
-    } else {
+
+    } else {	# Data from the spec file "header"
+
       if (/^summary:\s+(.+)/i) {
 	$pkgdata{main}{summary} = $1;
       } elsif (/^name:\s+(.+)/i) {
@@ -423,10 +427,8 @@ print $installscript;
 
     }
   }
-  # Parse and replace macros
-  # Start with the ones I use
-#  $pkgdata{main}{source} =~ s/\%\{name\}/$pkgdata{main}{name}/;
-#  $pkgdata{main}{source} =~ s/\%\{version\}/$pkgdata{main}{version}/;
+
+  # Parse and replace some more macros.  More will be replaced even later.
 
   # Expand macros as necessary.
   $scriptletbase = expandmacros($scriptletbase,'gp');
@@ -438,9 +440,7 @@ print $installscript;
 
 
 ## prep()
-# Unpacks the tarball from the SOURCES directory to the BUILD directory.
-# Speaks gzip and bzip2.
-# Finishes by applying patches in %prep section of spec file
+# Writes and executes the %prep script (mostly) built while reading the spec file.
 sub prep {
   # Replace some things here just to make sure.
   $prepscript = expandmacros($prepscript,'gp');
@@ -456,7 +456,7 @@ sub prep {
   # execute
   print "Calling \%prep script $prepscriptfile...\n";
   system("/bin/sh -e $prepscriptfile") == 0
-	or die "Can't exec: $!\nalso: $?";
+	or die "Can't exec: $!\n";
 
   # and clean up
   unlink $prepscriptfile;
@@ -464,8 +464,7 @@ sub prep {
 
 
 ## build()
-# Execute commands provided as a shell script.  It may prove simpler
-# to do as rpm does and actually create a little shell script.
+# Writes and executes the %build script (mostly) built while reading the spec file.
 sub build {
   # Expand the macros
   $buildscript = expandmacros($buildscript,'cgbp');
@@ -478,12 +477,10 @@ sub build {
   print BUILDSCRIPT $buildscript;
   close BUILDSCRIPT;
 
-#print "'$scriptletbase$buildscript'";
-#exit 0;
   # execute
   print "Calling \%build script $buildscriptfile...\n";
   system("/bin/sh -e $buildscriptfile") == 0
-	or die "Can't exec: $!\nalso: $?";
+	or die "Can't exec: $!\n";
 
   # and clean up
   unlink $buildscriptfile;
@@ -491,7 +488,7 @@ sub build {
 
 
 ## install()
-# Creates and executes %install script(let)
+# Writes and executes the %install script (mostly) built while reading the spec file.
 sub install {
   # Expand the macros
   $installscript = expandmacros($installscript,'igbp');
@@ -508,7 +505,7 @@ sub install {
   # execute
   print "Calling \%install script $installscriptfile...\n";
   system("/bin/sh -e $installscriptfile") == 0
-	or die "Can't exec: $!\nalso: $?";
+	or die "Can't exec: $!\n";
 
   # and clean up
   unlink $installscriptfile;
@@ -517,12 +514,15 @@ sub install {
 
 ## binpackage()
 # Creates the binary .deb package from the installed tree in $buildroot.
+# Writes and executes a shell script to do so.
+# Creates miscellaneous files required by dpkg-deb to actually build the package file.
 sub binpackage {
-  # Some checks on the .deb file location
+  # Make sure we have somewhere to write the .deb file
   if (!-e "$topdir/DEBS/i386") {
 #	"if [ -e $topdir/DEBS/i386 ]; then\n\tmkdir $topdir/DEBS/i386\nfi\n".
     mkdir "$topdir/DEBS/i386";
   }
+
   # Gotta do this first, otherwise the control file has nowhere to go.  >:(
   mkdir "$buildroot/DEBIAN";
 
@@ -533,7 +533,7 @@ sub binpackage {
   print DEBSCRIPT $scriptletbase;
   print DEBSCRIPT "tree $buildroot\n".
 	"fakeroot dpkg-deb -b $buildroot $topdir/DEBS/i386/$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
-
+    # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
   close DEBSCRIPT;
 
   my $control = "Package: $pkgdata{main}{name}\n".
@@ -544,14 +544,9 @@ sub binpackage {
 	"Maintainer: $pkgdata{main}{packager}\n".
 	"Description: $pkgdata{main}{desc}\n";
 
-eval {
   open CONTROL, ">$buildroot/DEBIAN/control";
   print CONTROL $control;
   close CONTROL;
-};
-if ($@) {
-  print $@;
-}
 
 #Package: httpd
 #Version: 2.0.54-7via
@@ -566,15 +561,13 @@ if ($@) {
 # apache2 for ViaNet.  Includes per-vhost setuid patches from
 # http://home.samfundet.no/~sesse/mpm-itk/.
 
-
   # execute
   print "Creating .deb for $pkgdata{main}{name}...\n";
   system("/bin/sh -e $debscriptfile") == 0
-	or die "Can't exec: $!\nalso: $?";
+	or die "Can't exec: $!\n";
 
   # and clean up
   unlink $debscriptfile;
-
 } # end binpackage()
 
 
@@ -583,9 +576,11 @@ sub srcpackage {}
 
 ## expandmacros()
 # Expands all %{blah} macros in the passed string
+# Split up a bit with some sections so we don't spend time trying to
+# expand macros that are only used in a few specific places.
 sub expandmacros {
   my $macrostring = shift;
-  my $section = shift;	# We'll want to split things up a bit eventually.
+  my $section = shift;
 
   # To allow the FHS-ish %configure, %make, and %makeinstall to work The Right Way.
   # (Without clobbering the global $buildroot.)
@@ -636,21 +631,23 @@ sub expandmacros {
     # tagged on the end where they take precedence (supposedly)
     # over the "default" ones.
 
-    $macrostring =~ s|%{_mandir}|%{_datadir}/man|g;	#/usr/share/man
-    $macrostring =~ s|%{_infodir}|%{_datadir}/info|g;	#/usr/share/info
-    $macrostring =~ s|%{_oldincludedir}|$prefix/usr/include|g;	#/usr/include
+    # Now we cascade the macros introduced above.  >_<
+									# Wot ot to go theah:
+    $macrostring =~ s|%{_mandir}|%{_datadir}/man|g;			#/usr/share/man
+    $macrostring =~ s|%{_infodir}|%{_datadir}/info|g;			#/usr/share/info
+    $macrostring =~ s|%{_oldincludedir}|$prefix/usr/include|g;		#/usr/include
     $macrostring =~ s|%{_includedir}|$prefix%{_prefix\}/include|g;	#/usr/include
     $macrostring =~ s|%{_libdir}|$prefix%{_exec_prefix}/%{_lib}|g;	#/usr/lib
-    $macrostring =~ s|%{_lib}|lib|g;						#?
+    $macrostring =~ s|%{_lib}|lib|g;					#?
     $macrostring =~ s|%{_localstatedir}|$prefix/var|g;			#/var
     $macrostring =~ s|%{_sharedstatedir}|$prefix%{_prefix}/com|g;	#/usr/com WTF?
-    $macrostring =~ s|%{_sysconfdir}|$prefix/etc|g;				#/etc
+    $macrostring =~ s|%{_sysconfdir}|$prefix/etc|g;			#/etc
     $macrostring =~ s|%{_datadir}|$prefix%{_prefix}/share|g;		#/usr/share
     $macrostring =~ s|%{_libexecdir}|$prefix%{_exec_prefix}/libexec|g;	#/usr/libexec
-    $macrostring =~ s|%{_sbindir}|$prefix%{_exec_prefix}/sbin|g;		#/usr/sbin
+    $macrostring =~ s|%{_sbindir}|$prefix%{_exec_prefix}/sbin|g;	#/usr/sbin
     $macrostring =~ s|%{_bindir}|$prefix%{_exec_prefix}/bin|g;		#/usr/bin
     $macrostring =~ s|%{_exec_prefix}|$prefix%{_prefix}|g;		#/usr
-    $macrostring =~ s|%{_prefix}|/usr|g;			#/usr
+    $macrostring =~ s|%{_prefix}|/usr|g;				#/usr
   } # done with config section
 
   # Package data
