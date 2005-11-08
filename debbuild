@@ -411,6 +411,8 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       } elsif (/^source:\s+(.+)/i) {
 	$pkgdata{main}{source} = $1;
 	die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
+      } elsif (/^source([0-9]+):\s+(.+)/i) {
+	$pkgdata{sources}{$1} = $2;
       } elsif (/^patch([^:]+):\s+(.+)$/i) {
 	$pkgdata{main}{"patch$1"} = $2;
       }
@@ -652,11 +654,13 @@ sub expandmacros {
 
   # Package data
   if ($section =~ /p/) {
-    $macrostring =~ s/\%\{buildroot\}/$buildroot/g;
-
-    $macrostring =~ s/\%\{name\}/$pkgdata{main}{name}/g;
-    $macrostring =~ s/\%\{version\}/$pkgdata{main}{version}/g;
-    $macrostring =~ s/\%\{release\}/$pkgdata{main}{release}/g;
+    $macrostring =~ s/\%\{buildroot\}/$buildroot/gi;
+    foreach my $source (keys %{$pkgdata{sources}}) {
+      $macrostring =~ s/\%\{source$source\}/$topdir\/SOURCES\/$pkgdata{sources}{$source}/gi;
+    }
+    $macrostring =~ s/\%\{name\}/$pkgdata{main}{name}/gi;
+    $macrostring =~ s/\%\{version\}/$pkgdata{main}{version}/gi;
+    $macrostring =~ s/\%\{release\}/$pkgdata{main}{release}/gi;
   }
 
   # Globals, and not-so-globals
