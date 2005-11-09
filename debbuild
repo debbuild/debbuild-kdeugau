@@ -98,6 +98,11 @@ my $prepscript;
 my $buildscript;
 my $installscript;
 my $cleanscript;
+# pre/post (un)install scripts.  Note that these will likely barf as-is.  :/
+my $preinstscript = '';
+my $postinstscript = '';
+my $preuninstscript = '';
+my $postuninstscript = '';
 
 die "Not enough arguments\n" if #$argv == 0;
 
@@ -380,9 +385,30 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	}
 	$cleanscript = expandmacros($cleanscript,'gp');
       }
-      if (/^\%post/) {
+    # pre/post (un)install scripts
+      if (/^\%pre\b/) {
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $preinstscript .= $_;
+	}
       }
-      if (/^\%preun/) {
+      if (/^\%post\b/) {
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $postinstscript .= $_;
+	}
+      }
+      if (/^\%preun\b/) {
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $preuninstscript .= $_;
+	}
+      }
+      if (/^\%postun\b/) {
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $postuninstscript .= $_;
+	}
       }
       if (/^\%files/) {
 	# Danger! Danger!
@@ -438,6 +464,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
   $buildroot = $cmdbuildroot if $cmdbuildroot;
   $buildroot = expandmacros($buildroot,'gp');
 
+  close SPECFILE;
 } # end parse_spec()
 
 
@@ -533,8 +560,8 @@ sub binpackage {
   sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
   print DEBSCRIPT $scriptletbase;
-  print DEBSCRIPT "tree $buildroot\n".
-	"fakeroot dpkg-deb -b $buildroot $topdir/DEBS/i386/$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
+  print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot $topdir/DEBS/i386/".
+	"$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
     # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
   close DEBSCRIPT;
 
@@ -550,6 +577,37 @@ sub binpackage {
   print CONTROL $control;
   close CONTROL;
 
+  if ($preinstscript ne '') {
+    open PREINST, ">$buildroot/DEBIAN/preinst";
+    print PREINST "#!/bin/sh\nset -e\n\n";
+    print PREINST $preinstscript;
+    close PREINST;
+    `chmod 0755 $buildroot/DEBIAN/preinst`;
+  }
+  if ($postinstscript ne '') {
+    open POSTINST, ">$buildroot/DEBIAN/postinst";
+    print POSTINST "#!/bin/sh\nset -e\n\n";
+    print POSTINST $postinstscript;
+    close POSTINST;
+    `chmod 0755 $buildroot/DEBIAN/postinst`;
+  }
+  if ($preuninstscript ne '') {
+    open PREUNINST, ">$buildroot/DEBIAN/prerm";
+    print PREUNINST "#!/bin/sh\nset -e\n\n";
+    print PREUNINST $preuninstscript;
+    close PREUNINST;
+    `chmod 0755 $buildroot/DEBIAN/prerm`;
+  }
+  if ($postuninstscript ne '') {
+    open POSTUNINST, ">$buildroot/DEBIAN/postrm";
+    print POSTUNINST "#!/bin/sh\nset -e\n\n";
+    print POSTUNINST $postuninstscript;
+    close POSTUNINST;
+    `chmod 0755 $buildroot/DEBIAN/postrm`;
+  }
+
+print `ls -l $buildroot/DEBIAN`;
+
 #Package: httpd
 #Version: 2.0.54-7via
 #Section: unknown
@@ -564,7 +622,7 @@ sub binpackage {
 # http://home.samfundet.no/~sesse/mpm-itk/.
 
   # execute
-  print "Creating .deb for $pkgdata{main}{name}...\n";
+  print "Calling package creation script $debscriptfile for $pkgdata{main}{name}...\n";
   system("/bin/sh -e $debscriptfile") == 0
 	or die "Can't exec: $!\n";
 
