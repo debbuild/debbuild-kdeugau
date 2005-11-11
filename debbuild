@@ -646,11 +646,28 @@ sub expandmacros {
   # (Without clobbering the global $buildroot.)
   my $prefix = '';
 
-# %configure, %make, and %makeinstall all share quite a pile.
-# I call it the FHS block, so it gets pushed forward as %{fhs}.
+# %configure, %make, and %makeinstall all share quite a pile - almost.  GRR.
+# I call it the FHS block, so it gets pushed forward as %{fhs}.  Note that
+# %configure doesn't use this because of the -- bits.
   if ($section =~ /c/) {
     # %configure macro
-    $macrostring =~ s'%configure'./configure %{fhs}';
+# Don't know what it's for, don't have a useful default replacement
+# 	--program-prefix=%{_program_prefix} \
+    $macrostring =~ s'%configure'./configure --host=$DEB_HOST_GNU_TYPE \
+	--build=$DEB_BUILD_GNU_TYPE \
+	--prefix=%{_prefix} \
+	--exec-prefix=%{_exec_prefix} \
+	--bindir=%{_bindir} \
+	--sbindir=%{_sbindir} \
+	--sysconfdir=%{_sysconfdir} \
+	--datadir=%{_datadir} \
+	--includedir=%{_includedir} \
+	--libdir=%{_libdir} \
+	--libexecdir=%{_libexecdir} \
+	--localstatedir=%{_localstatedir} \
+	--sharedstatedir=%{_sharedstatedir} \
+	--mandir=%{_mandir} \
+	--infodir=%{_infodir} ';
   } # done %configure
 
   if ($section =~ /m/) {
@@ -668,23 +685,22 @@ sub expandmacros {
   # Build data
   # Note that these are processed in reverse order to get the substitution order right
   if ($section =~ /b/) {
-# Don't know what it's for, don't have a useful default replacement
-# 	--program-prefix=%{_program_prefix} \
-    $macrostring =~ s'%{fhs}'--host=$DEB_HOST_GNU_TYPE \
-	--build=$DEB_BUILD_GNU_TYPE \
-	--prefix=%{_prefix} \
-	--exec-prefix=%{_exec_prefix} \
-	--bindir=%{_bindir} \
-	--sbindir=%{_sbindir} \
-	--sysconfdir=%{_sysconfdir} \
-	--datadir=%{_datadir} \
-	--includedir=%{_includedir} \
-	--libdir=%{_libdir} \
-	--libexecdir=%{_libexecdir} \
-	--localstatedir=%{_localstatedir} \
-	--sharedstatedir=%{_sharedstatedir} \
-	--mandir=%{_mandir} \
-	--infodir=%{_infodir} ';
+    $macrostring =~ s'%{fhs}'host=$DEB_HOST_GNU_TYPE \
+	build=$DEB_BUILD_GNU_TYPE \
+	prefix=%{_prefix} \
+	exec-prefix=%{_exec_prefix} \
+	bindir=%{_bindir} \
+	sbindir=%{_sbindir} \
+	sysconfdir=%{_sysconfdir} \
+	datadir=%{_datadir} \
+	includedir=%{_includedir} \
+	libdir=%{_libdir} \
+	libexecdir=%{_libexecdir} \
+	localstatedir=%{_localstatedir} \
+	sharedstatedir=%{_sharedstatedir} \
+	mandir=%{_mandir} \
+	infodir=%{_infodir} \
+';
 
     # Note that the above regex terminates with the extra space
     # "Just In Case" of user additions, which will then get neatly
