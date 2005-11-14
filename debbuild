@@ -10,6 +10,32 @@
 # Last update by $Author$
 ###
 
+=head1 NAME
+
+debbuild - Build Debian-compatible packages from RPM spec files
+
+=head1 SYNOPSIS
+
+ debbuild {-ba|-bb|-bp|-bc|-bi|-bl|-bs} [build-options] file.spec
+
+ debbuild {-ta|-tb|-tp|-tc|-ti|-tl|-ts} [build-options] file.tar.{gz|bz2}
+
+ debbuild --rebuild file.src.{rpm|deb}
+
+=head1 DESCRIPTION
+
+This script attempts to build Debian-friendly semi-native packages
+from RPM spec files, RPM-friendly tarballs, and RPM source packages
+(.src.rpm).  It accepts I<most> of the options rpmbuild does, and
+should be able to interpret most spec files usefully.  Perl modules
+should be handled via CPAN+dh-make-perl instead;  Debian's conventions
+for such things do not lend themselves to automated conversion.
+
+As far as possible, the command-line options are identical to those
+from rpmbuild, although several rpmbuild options are not supported.
+
+=cut
+
 use strict;
 use warnings;
 use Fcntl;	# for sysopen flags
