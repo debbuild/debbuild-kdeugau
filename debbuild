@@ -308,8 +308,8 @@ LINE: while (<SPECFILE>) {
           redo LINE if /^\%/;
           $pkgdata{main}{desc} .= " $_";
         }
-
       }
+
       if (/^\%prep/) {
 	# %prep section.  May have %setup macro;  may include %patch tags,
 	# may be just a bare shell script.
@@ -412,6 +412,13 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       }
       if (/^\%files/) {
 	# Danger! Danger!
+      }
+      if (/^\%changelog/) {
+	$pkgdata{main}{changelog} = '';
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  $pkgdata{main}{changelog} .= $_;
+	}
       }
 
     } else {	# Data from the spec file "header"
