@@ -356,11 +356,11 @@ PREPSCRIPT: while (<SPECFILE>) {
 	    } else {
 	      $tarballdir = "$pkgdata{main}{name}-$pkgdata{main}{version}";
 	    }
-	    $prepscript .= "rm -rf $tarballdir\ntar -".
+	    $prepscript .= "rm -rf $tarballdir\ntar -xf".
 		( $pkgdata{main}{source} =~ /\.tar\.gz$/ ? "z" : "" ).
 		( $pkgdata{main}{source} =~ /\.tar\.bz2$/ ? "j" : "" ).
-		"x".( /\s+-q\s+/ ? '' : 'vv' )."f ".
-		"$topdir/SOURCES/$pkgdata{main}{source}\n".
+		( /\s+-q\s+/ ? '' : 'vv' ).
+		" $topdir/SOURCES/$pkgdata{main}{source}\n".
 		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n).
 		( /\s+-n\s+([^\s]+)\s+/ ?
 		  "cd $1\n" : "cd $pkgdata{main}{name}-$pkgdata{main}{version}\n" ).
