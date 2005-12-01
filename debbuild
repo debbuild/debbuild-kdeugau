@@ -38,6 +38,7 @@ my $tarball;
 my $srcpkg;
 my $cmdbuildroot;
 my $tarballdir;	# This should really be initialized, but the coding makes it, um, ugly.
+my %specglobals;	# For %define's in specfile, among other things.
 
 # Initialized globals
 my $verbosity = 0;
@@ -92,11 +93,15 @@ q(
 #	Source, URL, Packager, BuildRoot, Description
 # 10/31/2005 Maybe this should be flatter?  -kgd
 my %pkgdata;
+# Files listing.  Embedding this in %pkgdata would be, um, messy.
+my %filelist;
 
 # Scriptlets
 my $prepscript;
 my $buildscript;
-my $installscript;
+# %install doesn't need the full treatment from %clean;  just an empty place to install to.
+# NB - rpm doesn't do this;  is it really necessary?
+my $installscript = '[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT'."\n";
 my $cleanscript;
 # pre/post (un)install scripts.  Note that these will likely barf as-is.  :/
 my $preinstscript = '';
@@ -302,6 +307,10 @@ LINE: while (<SPECFILE>) {
     if (/^\%/) {
       # A macro that needs further processing.
 
+      if (/^\%define\s+([^\s]+)\s+([^\s]+)/) {
+        $specglobals{$1} = expandmacros($2,'g');
+      }
+
       if (/^\%description/) {
 	$pkgdata{main}{desc} .= $_;
         while (<SPECFILE>) {
@@ -383,7 +392,10 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  redo LINE if /^\%/;
 	  $cleanscript .= $_;
 	}
+print "before:\n$cleanscript\n";
 	$cleanscript = expandmacros($cleanscript,'gp');
+print "\nafter:\n$cleanscript\n";
+exit 0;
       }
     # pre/post (un)install scripts
       if (/^\%pre\b/) {
@@ -410,7 +422,18 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  $postuninstscript .= $_;
 	}
       }
-      if (/^\%files/) {
+      if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9]+))?/) {
+	my $pkgname = 'main';
+	if ($1) {
+	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$name-$1"; }
+	  # subpackage not based on "main" package
+	  while (<SPECFILE>) {
+	    # need to update this to deal with %dir, %attr, etc
+	    redo LINE if /^\%/;
+	    $filelist{$pkgname} .= $_;
+	  }
+	}
+	# do we replace \n's with \s in $filelist{$pkgname}?
 	# Danger! Danger!
       }
       if (/^\%changelog/) {
@@ -481,6 +504,8 @@ sub prep {
   # Replace some things here just to make sure.
   $prepscript = expandmacros($prepscript,'gp');
 
+print $prepscript; exit 0;
+
   # create script filename
   my $prepscriptfile = "$tmpdir/deb-tmp.prep.".int(rand(99998)+1);
   sysopen(PREPSCRIPT, $prepscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
@@ -534,7 +559,7 @@ sub install {
   sysopen(INSTSCRIPT, $installscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
   print INSTSCRIPT $scriptletbase;
-  print INSTSCRIPT $cleanscript;	# Clean up our install target before installing into it.
+#  print INSTSCRIPT $cleanscript;	# Clean up our install target before installing into it.
   print INSTSCRIPT $installscript;
   close INSTSCRIPT;
 
@@ -749,6 +774,17 @@ sub expandmacros {
     $macrostring =~ s/\%\{_topdir\}/$topdir/g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'/usr/share/doc'g;
+
+    # %define's
+    foreach my $key (keys %specglobals) {
+      $macrostring =~ s|%{$key}|$specglobals{$key}|g;
+    }
+
+    # system programs.  RPM uses a global config file for these;  we'll just
+    # ASS-U-ME and make life a little simpler.
+    if ($macrostring =~ /\%\{\_\_([a-z0-9_-]+)\}/) {
+      $macrostring =~ s|%{__([a-z0-9_-]+)}|$1|g;
+    }
   } # done with globals section
 
   return $macrostring;
