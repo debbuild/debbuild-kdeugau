@@ -369,7 +369,7 @@ BUILDSCRIPT: while (<SPECFILE>) {
 	  } elsif (/^\%\{(__)?make\}/) {
 	    $buildscript .= expandmacros($_,'mgbp');
 	  } else {
-	    last BUILDSCRIPT if /^\%/;
+	    last BUILDSCRIPT if /^\%[^{]/;
 	    $buildscript .= $_;
 	  }
 	}
@@ -425,7 +425,7 @@ exit 0;
       if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9]+))?/) {
 	my $pkgname = 'main';
 	if ($1) {
-	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$name-$1"; }
+	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$pkgdata{main}{name}-$1"; }
 	  # subpackage not based on "main" package
 	  while (<SPECFILE>) {
 	    # need to update this to deal with %dir, %attr, etc
@@ -449,11 +449,11 @@ exit 0;
       if (/^summary:\s+(.+)/i) {
 	$pkgdata{main}{summary} = $1;
       } elsif (/^name:\s+(.+)/i) {
-	$pkgdata{main}{name} = $1;
+	$pkgdata{main}{name} = expandmacros($1,'g');
       } elsif (/^version:\s+(.+)/i) {
-	$pkgdata{main}{version} = $1;
+	$pkgdata{main}{version} = expandmacros($1,'g');
       } elsif (/^release:\s+(.+)/i) {
-	$pkgdata{main}{release} = $1;
+	$pkgdata{main}{release} = expandmacros($1,'g');
       } elsif (/^group:\s+(.+)/i) {
 	$pkgdata{main}{group} = $1;
       } elsif (/^copyright:\s+(.+)/i) {
@@ -504,7 +504,7 @@ sub prep {
   # Replace some things here just to make sure.
   $prepscript = expandmacros($prepscript,'gp');
 
-print $prepscript; exit 0;
+#print $prepscript; exit 0;
 
   # create script filename
   my $prepscriptfile = "$tmpdir/deb-tmp.prep.".int(rand(99998)+1);
@@ -709,17 +709,16 @@ sub expandmacros {
 
   if ($section =~ /i/) {
     # This is where we need to mangle $prefix.
-    $macrostring =~ s'%makeinstall'make %{fhs}
-	install';
+    $macrostring =~ s'%makeinstall'make %{fhs} install';
     $prefix = $buildroot;
   } # done %install and/or %makeinstall
 
   # Build data
   # Note that these are processed in reverse order to get the substitution order right
   if ($section =~ /b/) {
-    $macrostring =~ s'%{fhs}'host=$DEB_HOST_GNU_TYPE \
-	build=$DEB_BUILD_GNU_TYPE \
-	prefix=%{_prefix} \
+#    $macrostring =~ s'%{fhs}'host=$DEB_HOST_GNU_TYPE \
+#	build=$DEB_BUILD_GNU_TYPE \
+    $macrostring =~ s'%{fhs}'prefix=%{_prefix} \
 	exec-prefix=%{_exec_prefix} \
 	bindir=%{_bindir} \
 	sbindir=%{_sbindir} \
