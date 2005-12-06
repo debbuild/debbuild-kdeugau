@@ -366,7 +366,7 @@ PREPSCRIPT: while (<SPECFILE>) {
 BUILDSCRIPT: while (<SPECFILE>) {
 	  if (/^\%configure/) {
 	    $buildscript .= expandmacros($_,'cgbp');
-	  } elsif (/^\%\{(__)?make\}/) {
+	  } elsif (/^\%\{__make\}/) {
 	    $buildscript .= expandmacros($_,'mgbp');
 	  } else {
 	    last BUILDSCRIPT if /^\%[^{]/;
@@ -674,13 +674,10 @@ sub expandmacros {
   my $macrostring = shift;
   my $section = shift;
 
-  # To allow the FHS-ish %configure, %make, and %makeinstall to work The Right Way.
+  # To allow the FHS-ish %configure and %makeinstall to work The Right Way.
   # (Without clobbering the global $buildroot.)
   my $prefix = '';
 
-# %configure, %make, and %makeinstall all share quite a pile - almost.  GRR.
-# I call it the FHS block, so it gets pushed forward as %{fhs}.  Note that
-# %configure doesn't use this because of the -- bits.
   if ($section =~ /c/) {
     # %configure macro
 # Don't know what it's for, don't have a useful default replacement
@@ -703,9 +700,8 @@ sub expandmacros {
   } # done %configure
 
   if ($section =~ /m/) {
-    $macrostring =~ s'%make'make %{fhs}';
     $macrostring =~ s'%{__make}'make ';
-  } # done %make
+  } # done make
 
   if ($section =~ /i/) {
     # This is where we need to mangle $prefix.
@@ -742,18 +738,18 @@ sub expandmacros {
 									# Wot ot to go theah:
     $macrostring =~ s|%{_mandir}|%{_datadir}/man|g;			#/usr/share/man
     $macrostring =~ s|%{_infodir}|%{_datadir}/info|g;			#/usr/share/info
-    $macrostring =~ s|%{_oldincludedir}|$prefix/usr/include|g;		#/usr/include
-    $macrostring =~ s|%{_includedir}|$prefix%{_prefix\}/include|g;	#/usr/include
-    $macrostring =~ s|%{_libdir}|$prefix%{_exec_prefix}/%{_lib}|g;	#/usr/lib
+    $macrostring =~ s|%{_oldincludedir}|/usr/include|g;		#/usr/include
+    $macrostring =~ s|%{_includedir}|%{_prefix\}/include|g;	#/usr/include
+    $macrostring =~ s|%{_libdir}|%{_exec_prefix}/%{_lib}|g;	#/usr/lib
     $macrostring =~ s|%{_lib}|lib|g;					#?
-    $macrostring =~ s|%{_localstatedir}|$prefix/var|g;			#/var
-    $macrostring =~ s|%{_sharedstatedir}|$prefix%{_prefix}/com|g;	#/usr/com WTF?
-    $macrostring =~ s|%{_sysconfdir}|$prefix/etc|g;			#/etc
-    $macrostring =~ s|%{_datadir}|$prefix%{_prefix}/share|g;		#/usr/share
-    $macrostring =~ s|%{_libexecdir}|$prefix%{_exec_prefix}/libexec|g;	#/usr/libexec
-    $macrostring =~ s|%{_sbindir}|$prefix%{_exec_prefix}/sbin|g;	#/usr/sbin
-    $macrostring =~ s|%{_bindir}|$prefix%{_exec_prefix}/bin|g;		#/usr/bin
-    $macrostring =~ s|%{_exec_prefix}|$prefix%{_prefix}|g;		#/usr
+    $macrostring =~ s|%{_localstatedir}|/var|g;			#/var
+    $macrostring =~ s|%{_sharedstatedir}|%{_prefix}/com|g;	#/usr/com WTF?
+    $macrostring =~ s|%{_sysconfdir}|/etc|g;			#/etc
+    $macrostring =~ s|%{_datadir}|%{_prefix}/share|g;		#/usr/share
+    $macrostring =~ s|%{_libexecdir}|%{_exec_prefix}/libexec|g;	#/usr/libexec
+    $macrostring =~ s|%{_sbindir}|%{_exec_prefix}/sbin|g;	#/usr/sbin
+    $macrostring =~ s|%{_bindir}|%{_exec_prefix}/bin|g;		#/usr/bin
+    $macrostring =~ s|%{_exec_prefix}|%{_prefix}|g;		#/usr
     $macrostring =~ s|%{_prefix}|/usr|g;				#/usr
   } # done with config section
 
