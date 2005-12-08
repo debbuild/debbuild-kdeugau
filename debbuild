@@ -470,7 +470,13 @@ exit 0;
       } elsif (/^source([0-9]+):\s+(.+)/i) {
 	$pkgdata{sources}{$1} = $2;
       } elsif (/^patch([^:]+):\s+(.+)$/i) {
-	$pkgdata{main}{"patch$1"} = $2;
+	my $patchname = "patch$1";
+	$pkgdata{main}{$patchname} = $2;
+	if ($pkgdata{main}{$patchname} =~ /\//) {
+	  # URL-style patch.  Rare but not unheard-of.
+	  my @patchbits = split '/', $pkgdata{main}{$patchname};
+	  $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
+	}
       }
 #Name: suwrap
 #Version: 0.04
