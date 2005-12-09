@@ -93,6 +93,7 @@ q(
 #	Source, URL, Packager, BuildRoot, Description
 # 10/31/2005 Maybe this should be flatter?  -kgd
 my %pkgdata;
+my @pkglist = ('main');	#sigh
 # Files listing.  Embedding this in %pkgdata would be, um, messy.
 my %filelist;
 
@@ -140,7 +141,8 @@ if ($cmdopts{stage} eq 'c' || ($cmdopts{stage} =~ /[ilabs]/ && $cmdopts{short} n
   build();
 }
 # -> install if -.[ilabs]
-if ($cmdopts{stage} =~ /[ilabs]/) {
+if ($cmdopts{stage} eq 'i' || ($cmdopts{stage} =~ /[labs]/ && $cmdopts{short} ne 'y')) {
+#if ($cmdopts{stage} =~ /[ilabs]/) {
   install();
 }
 # -> binpkg and srcpkg if -.a
@@ -256,7 +258,9 @@ sub parse_cmd {
   # NB - this is NOT fatal, just ignored!
   if ($cmdopts{short} eq 'y' && $cmdopts{stage} =~ /[labs]/) {
     warn "Can't use --short-circuit for $targets{$cmdopts{stage}} stage.  Ignoring.\n";
-    $cmdopts{short} = 'n';
+##temp  Allow short-circuit on full builds so we can experiment
+# with apache pkg without spending hours recompiling repeatedly
+#    $cmdopts{short} = 'n';
   }
 
   # Valid options, with example arguments (if any):
@@ -311,12 +315,29 @@ LINE: while (<SPECFILE>) {
         $specglobals{$1} = expandmacros($2,'g');
       }
 
-      if (/^\%description/) {
-	$pkgdata{main}{desc} .= $_;
+      if (/^\%description(?:\s+(?:-n\s+)?([a-zA-Z0-9_.-]+))?/) {
+	my $subname = "main";
+	if ($1) {
+	  if (/-n/) { $subname = $1; } else { $subname = "$pkgdata{main}{name}-$1"; }
+	}
         while (<SPECFILE>) {
           redo LINE if /^\%/;
-          $pkgdata{main}{desc} .= " $_";
+          $pkgdata{$subname}{desc} .= " $_";
         }
+      }
+      if (/^\%package\s+(?:-n\s+)?([a-zA-Z0-9_.-]+)/) {
+	my $subname;
+	if (/-n/) { $subname = $1; } else { $subname = "$pkgdata{main}{name}-$1"; }
+	push @pkglist, $subname;
+	$pkgdata{$subname}{name} = $subname;
+	$pkgdata{$subname}{version} = $pkgdata{main}{version};
+	while (<SPECFILE>) {
+	  redo LINE if /^\%/;
+	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version):\s+(.+)$/i)) {
+	    $dname =~ tr/[A-Z]/[a-z]/;
+	    $pkgdata{$subname}{$dname} = $dvalue;
+	  }
+	}
       }
 
       if (/^\%prep/) {
@@ -426,12 +447,16 @@ exit 0;
 	my $pkgname = 'main';
 	if ($1) {
 	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$pkgdata{main}{name}-$1"; }
-	  # subpackage not based on "main" package
-	  while (<SPECFILE>) {
-	    # need to update this to deal with %dir, %attr, etc
-	    redo LINE if /^\%/;
-	    $filelist{$pkgname} .= $_;
-	  }
+	}
+	# subpackage not based on "main" package
+#print "$pkgname\n";
+	while (<SPECFILE>) {
+	  # need to update this to deal with %dir, %attr, etc
+	  redo LINE if /^\%/;
+chomp;
+#print; print "\n";
+	  $filelist{$pkgname} .= " $_";
+#print $pkgdata{$pkgname}{files}; print "\n";
 	}
 	# do we replace \n's with \s in $filelist{$pkgname}?
 	# Danger! Danger!
@@ -583,6 +608,7 @@ sub install {
 # Creates the binary .deb package from the installed tree in $buildroot.
 # Writes and executes a shell script to do so.
 # Creates miscellaneous files required by dpkg-deb to actually build the package file.
+# Should handle simple subpackages
 sub binpackage {
   # Make sure we have somewhere to write the .deb file
   if (!-e "$topdir/DEBS/i386") {
@@ -590,61 +616,86 @@ sub binpackage {
     mkdir "$topdir/DEBS/i386";
   }
 
-  # Gotta do this first, otherwise the control file has nowhere to go.  >:(
-  mkdir "$buildroot/DEBIAN";
+print "\n\nmoving files for subpackages...\n";
+##work
+  foreach my $pkg (@pkglist) {
+#next if $pkg eq 'sources';
+print "got here, trying to move files for $pkg...\n";
 
-  # create script filename
-  my $debscriptfile = "$tmpdir/deb-tmp.pkg.".int(rand(99998)+1);
-  sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
+    # Gotta do this first, otherwise we don't have a place to move files from %files
+    mkdir "$buildroot/$pkg";
+    my @pkgfilelist = split ' ', $filelist{$pkg};
+    foreach my $pkgfile (@pkgfilelist) {
+#print "finding path for $pkgfile\n";
+      my @filepath = ($pkgfile =~ /(.+)\/([a-zA-Z0-9_\.\+\-]+)$/);
+      qx { mkdir -p $buildroot/$pkg$filepath[0] }
+	if $filepath[0] ne '';
+#print "mkdir -p $buildroot/$pkg$filepath[0]\n";
+#print "$filepath[0]\n";
+      qx { mv $buildroot$pkgfile $buildroot/$pkg$filepath[0] };
+#print "mv $buildroot$pkgfile $buildroot/$pkg$filepath[0]\n";
+    }
+#exit 0;
+    # Gotta do this next, otherwise the control file has nowhere to go.  >:(
+    mkdir "$buildroot/$pkg/DEBIAN";
+
+    # create script filename
+    my $debscriptfile = "$tmpdir/deb-tmp.pkg.".int(rand(99998)+1);
+    sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
-  print DEBSCRIPT $scriptletbase;
-  print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot $topdir/DEBS/i386/".
-	"$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}_i386.deb\n";
-    # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
-  close DEBSCRIPT;
+    print DEBSCRIPT $scriptletbase;
+    print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot/$pkg $topdir/DEBS/i386/".
+	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb\n";
+      # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
+    close DEBSCRIPT;
 
-  my $control = "Package: $pkgdata{main}{name}\n".
-	"Version: $pkgdata{main}{version}-$pkgdata{main}{release}\n".
-	"Section: unknown\n".
+#my $control;
+#eval {
+    my $control = "Package: $pkgdata{$pkg}{name}\n".
+	"Version: $pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
+	"Section: $pkgdata{$pkg}{group}\n".
 	"Priority: optional\n".
 	"Architecture: i386\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
-	"Description: $pkgdata{main}{desc}\n";
+	"Description: $pkgdata{$pkg}{summary}\n";
+    $control .= "$pkgdata{$pkg}{desc}\n";
+#};
+#die "control: $control\n\n $@ \n" if $@;
 
-  open CONTROL, ">$buildroot/DEBIAN/control";
-  print CONTROL $control;
-  close CONTROL;
+    open CONTROL, ">$buildroot/$pkg/DEBIAN/control";
+    print CONTROL $control;
+    close CONTROL;
 
-  if ($preinstscript ne '') {
-    open PREINST, ">$buildroot/DEBIAN/preinst";
-    print PREINST "#!/bin/sh\nset -e\n\n";
-    print PREINST $preinstscript;
-    close PREINST;
-    `chmod 0755 $buildroot/DEBIAN/preinst`;
-  }
-  if ($postinstscript ne '') {
-    open POSTINST, ">$buildroot/DEBIAN/postinst";
-    print POSTINST "#!/bin/sh\nset -e\n\n";
-    print POSTINST $postinstscript;
-    close POSTINST;
-    `chmod 0755 $buildroot/DEBIAN/postinst`;
-  }
-  if ($preuninstscript ne '') {
-    open PREUNINST, ">$buildroot/DEBIAN/prerm";
-    print PREUNINST "#!/bin/sh\nset -e\n\n";
-    print PREUNINST $preuninstscript;
-    close PREUNINST;
-    `chmod 0755 $buildroot/DEBIAN/prerm`;
-  }
-  if ($postuninstscript ne '') {
-    open POSTUNINST, ">$buildroot/DEBIAN/postrm";
-    print POSTUNINST "#!/bin/sh\nset -e\n\n";
-    print POSTUNINST $postuninstscript;
-    close POSTUNINST;
-    `chmod 0755 $buildroot/DEBIAN/postrm`;
-  }
+    if ($preinstscript ne '') {
+      open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
+      print PREINST "#!/bin/sh\nset -e\n\n";
+      print PREINST $preinstscript;
+      close PREINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
+    }
+    if ($postinstscript ne '') {
+      open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
+      print POSTINST "#!/bin/sh\nset -e\n\n";
+      print POSTINST $postinstscript;
+      close POSTINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
+    }
+    if ($preuninstscript ne '') {
+      open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
+      print PREUNINST "#!/bin/sh\nset -e\n\n";
+      print PREUNINST $preuninstscript;
+      close PREUNINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
+    }
+    if ($postuninstscript ne '') {
+      open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
+      print POSTUNINST "#!/bin/sh\nset -e\n\n";
+      print POSTUNINST $postuninstscript;
+      close POSTUNINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
+    }
 
-print `ls -l $buildroot/DEBIAN`;
+#print `ls -l $buildroot/DEBIAN`;
 
 #Package: httpd
 #Version: 2.0.54-7via
@@ -659,13 +710,16 @@ print `ls -l $buildroot/DEBIAN`;
 # apache2 for ViaNet.  Includes per-vhost setuid patches from
 # http://home.samfundet.no/~sesse/mpm-itk/.
 
-  # execute
-  print "Calling package creation script $debscriptfile for $pkgdata{main}{name}...\n";
-  system("/bin/sh -e $debscriptfile") == 0
+    # execute
+    print "Calling package creation script $debscriptfile for $pkgdata{$pkg}{name}...\n";
+    system("/bin/sh -e $debscriptfile") == 0
 	or die "Can't exec: $!\n";
 
-  # and clean up
-  unlink $debscriptfile;
+    # and clean up
+    unlink $debscriptfile;
+
+  } # subpackage loop
+
 } # end binpackage()
 
 
