@@ -141,8 +141,8 @@ if ($cmdopts{stage} eq 'c' || ($cmdopts{stage} =~ /[ilabs]/ && $cmdopts{short} n
   build();
 }
 # -> install if -.[ilabs]
-if ($cmdopts{stage} eq 'i' || ($cmdopts{stage} =~ /[labs]/ && $cmdopts{short} ne 'y')) {
-#if ($cmdopts{stage} =~ /[ilabs]/) {
+#if ($cmdopts{stage} eq 'i' || ($cmdopts{stage} =~ /[labs]/ && $cmdopts{short} ne 'y')) {
+if ($cmdopts{stage} =~ /[ilabs]/) {
   install();
 }
 # -> binpkg and srcpkg if -.a
@@ -258,9 +258,7 @@ sub parse_cmd {
   # NB - this is NOT fatal, just ignored!
   if ($cmdopts{short} eq 'y' && $cmdopts{stage} =~ /[labs]/) {
     warn "Can't use --short-circuit for $targets{$cmdopts{stage}} stage.  Ignoring.\n";
-##temp  Allow short-circuit on full builds so we can experiment
-# with apache pkg without spending hours recompiling repeatedly
-#    $cmdopts{short} = 'n';
+    $cmdopts{short} = 'n';
   }
 
   # Valid options, with example arguments (if any):
@@ -616,26 +614,20 @@ sub binpackage {
     mkdir "$topdir/DEBS/i386";
   }
 
-print "\n\nmoving files for subpackages...\n";
 ##work
   foreach my $pkg (@pkglist) {
-#next if $pkg eq 'sources';
-print "got here, trying to move files for $pkg...\n";
 
     # Gotta do this first, otherwise we don't have a place to move files from %files
     mkdir "$buildroot/$pkg";
+
     my @pkgfilelist = split ' ', $filelist{$pkg};
     foreach my $pkgfile (@pkgfilelist) {
-#print "finding path for $pkgfile\n";
       my @filepath = ($pkgfile =~ /(.+)\/([a-zA-Z0-9_\.\+\-]+)$/);
       qx { mkdir -p $buildroot/$pkg$filepath[0] }
 	if $filepath[0] ne '';
-#print "mkdir -p $buildroot/$pkg$filepath[0]\n";
-#print "$filepath[0]\n";
       qx { mv $buildroot$pkgfile $buildroot/$pkg$filepath[0] };
-#print "mv $buildroot$pkgfile $buildroot/$pkg$filepath[0]\n";
     }
-#exit 0;
+
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
 
@@ -649,8 +641,6 @@ print "got here, trying to move files for $pkg...\n";
       # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
     close DEBSCRIPT;
 
-#my $control;
-#eval {
     my $control = "Package: $pkgdata{$pkg}{name}\n".
 	"Version: $pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
 	"Section: $pkgdata{$pkg}{group}\n".
@@ -659,8 +649,6 @@ print "got here, trying to move files for $pkg...\n";
 	"Maintainer: $pkgdata{main}{packager}\n".
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
-#};
-#die "control: $control\n\n $@ \n" if $@;
 
     open CONTROL, ">$buildroot/$pkg/DEBIAN/control";
     print CONTROL $control;
