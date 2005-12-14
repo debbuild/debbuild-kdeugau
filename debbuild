@@ -416,6 +416,7 @@ print "before:\n$cleanscript\n";
 print "\nafter:\n$cleanscript\n";
 exit 0;
       }
+
     # pre/post (un)install scripts
       if (/^\%pre\b/) {
 	while (<SPECFILE>) {
@@ -441,24 +442,31 @@ exit 0;
 	  $postuninstscript .= $_;
 	}
       }
+    # done %pre/%post scripts
+
       if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9]+))?/) {
 	my $pkgname = 'main';
-	if ($1) {
+	if ($1) {	# Magic to add entries to the right list of files
 	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$pkgdata{main}{name}-$1"; }
 	}
-	# subpackage not based on "main" package
-#print "$pkgname\n";
 	while (<SPECFILE>) {
-	  # need to update this to deal with %dir, %attr, etc
+	  chomp;
+	  # need to update this to deal (properly) with %dir, %attr, etc
+	  next if /^\%dir/;
+	  next if /^\%attr/;
+	  next if /^\%defattr/;
+
+	  # and finally we can fall through %{_<FHS>}-prefixed locations...
+	  $filelist{$pkgname} .= " $_" if /^\%\{_/;
+
+	  # ... unknown or "next section" % directives ...
 	  redo LINE if /^\%/;
-chomp;
-#print; print "\n";
+
+	  # ... and "normal" files
 	  $filelist{$pkgname} .= " $_";
-#print $pkgdata{$pkgname}{files}; print "\n";
 	}
-	# do we replace \n's with \s in $filelist{$pkgname}?
-	# Danger! Danger!
-      }
+      } # done %file section
+
       if (/^\%changelog/) {
 	$pkgdata{main}{changelog} = '';
 	while (<SPECFILE>) {
@@ -814,7 +822,8 @@ sub expandmacros {
 
   # Globals, and not-so-globals
   if ($section =~ /g/) {
-    $macrostring =~ s/\%\{_topdir\}/$topdir/g;
+    $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
+    $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'/usr/share/doc'g;
 
