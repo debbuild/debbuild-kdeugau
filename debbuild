@@ -22,6 +22,8 @@ use Fcntl;	# for sysopen flags
 # -> Parse/execute "user" config/macros (if any - *my* requirement is %_topdir)
 # -> Parse command line for options, spec file/tarball/.src.deb (NB - also accept .src.rpm)
 
+sub expandmacros;
+
 # User's prefs for dirs, environment, etc,etc,etc.
 # config file ~/.debmacros
 # Default ordered search paths for config/macros:
@@ -144,6 +146,10 @@ if ($cmdopts{stage} eq 'c' || ($cmdopts{stage} =~ /[ilabs]/ && $cmdopts{short} n
 #if ($cmdopts{stage} eq 'i' || ($cmdopts{stage} =~ /[labs]/ && $cmdopts{short} ne 'y')) {
 if ($cmdopts{stage} =~ /[ilabs]/) {
   install();
+#foreach my $pkg (@pkglist) {
+#  print "files in $pkg:\n ".$filelist{$pkg}."\n";
+#}
+
 }
 # -> binpkg and srcpkg if -.a
 if ($cmdopts{stage} eq 'a') {
@@ -411,10 +417,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  redo LINE if /^\%/;
 	  $cleanscript .= $_;
 	}
-print "before:\n$cleanscript\n";
 	$cleanscript = expandmacros($cleanscript,'gp');
-print "\nafter:\n$cleanscript\n";
-exit 0;
       }
 
     # pre/post (un)install scripts
@@ -457,7 +460,12 @@ exit 0;
 	  next if /^\%defattr/;
 
 	  # and finally we can fall through %{_<FHS>}-prefixed locations...
-	  $filelist{$pkgname} .= " $_" if /^\%\{_/;
+	  if (/^\%\{_/) {
+	    $filelist{$pkgname} .= " $_";
+	    next;
+	  }
+	# EW.  Necessary to clear up %define expansions before we exit with redo.
+	  $_ = expandmacros $_, 'g';
 
 	  # ... unknown or "next section" % directives ...
 	  redo LINE if /^\%/;
@@ -465,6 +473,7 @@ exit 0;
 	  # ... and "normal" files
 	  $filelist{$pkgname} .= " $_";
 	}
+	$filelist{$pkgname} = expandmacros($filelist{$pkgname}, 'g');
       } # done %file section
 
       if (/^\%changelog/) {
@@ -618,7 +627,6 @@ sub install {
 sub binpackage {
   # Make sure we have somewhere to write the .deb file
   if (!-e "$topdir/DEBS/i386") {
-#	"if [ -e $topdir/DEBS/i386 ]; then\n\tmkdir $topdir/DEBS/i386\nfi\n".
     mkdir "$topdir/DEBS/i386";
   }
 
@@ -627,6 +635,9 @@ sub binpackage {
 
     # Gotta do this first, otherwise we don't have a place to move files from %files
     mkdir "$buildroot/$pkg";
+
+    # Eliminate any lingering % macros
+    $filelist{$pkg} = expandmacros $filelist{$pkg}, 'g';
 
     my @pkgfilelist = split ' ', $filelist{$pkg};
     foreach my $pkgfile (@pkgfilelist) {
@@ -826,6 +837,12 @@ sub expandmacros {
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'/usr/share/doc'g;
+
+    # Standard FHS locations
+    $macrostring =~ s'%{_bindir}'/usr/bin'g;
+    $macrostring =~ s'%{_sbindir}'/usr/bin'g;
+    $macrostring =~ s'%{_mandir}'/usr/share/man'g;
+    $macrostring =~ s'%{_includedir}'/usr/include'g;
 
     # %define's
     foreach my $key (keys %specglobals) {
