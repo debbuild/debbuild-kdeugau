@@ -641,7 +641,7 @@ sub binpackage {
 
     my @pkgfilelist = split ' ', $filelist{$pkg};
     foreach my $pkgfile (@pkgfilelist) {
-      my @filepath = ($pkgfile =~ /(.+)\/([a-zA-Z0-9_\.\+\-]+)$/);
+      my @filepath = ($pkgfile =~ m|(.+)/([^/]+)$|);
       qx { mkdir -p $buildroot/$pkg$filepath[0] }
 	if $filepath[0] ne '';
       qx { mv $buildroot$pkgfile $buildroot/$pkg$filepath[0] };
@@ -838,11 +838,14 @@ sub expandmacros {
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'/usr/share/doc'g;
 
-    # Standard FHS locations
+    # Standard FHS locations.  More or less.
     $macrostring =~ s'%{_bindir}'/usr/bin'g;
-    $macrostring =~ s'%{_sbindir}'/usr/bin'g;
+    $macrostring =~ s'%{_sbindir}'/usr/sbin'g;
     $macrostring =~ s'%{_mandir}'/usr/share/man'g;
     $macrostring =~ s'%{_includedir}'/usr/include'g;
+    $macrostring =~ s'%{_libdir}'/usr/lib'g;
+    $macrostring =~ s'%{_sysconfdir}'/etc'g;
+    $macrostring =~ s'%{_localstatedir}'/var'g;
 
     # %define's
     foreach my $key (keys %specglobals) {
