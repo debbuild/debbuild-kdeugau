@@ -650,6 +650,10 @@ sub binpackage {
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
 
+    # Hack the filename for the package into a Debian-tool-compatible format.  GRRRRRR!!!!!
+    # Have I mentioned I hate Debian Policy?
+    $pkgdata{$pkg}{name} =~ tr/_/-/;
+
     # create script filename
     my $debscriptfile = "$tmpdir/deb-tmp.pkg.".int(rand(99998)+1);
     sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
