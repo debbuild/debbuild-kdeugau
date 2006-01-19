@@ -673,33 +673,37 @@ sub binpackage {
     print CONTROL $control;
     close CONTROL;
 
-    if ($preinstscript ne '') {
-      open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
-      print PREINST "#!/bin/sh\nset -e\n\n";
-      print PREINST $preinstscript;
-      close PREINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
-    }
-    if ($postinstscript ne '') {
-      open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
-      print POSTINST "#!/bin/sh\nset -e\n\n";
-      print POSTINST $postinstscript;
-      close POSTINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
-    }
-    if ($preuninstscript ne '') {
-      open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
-      print PREUNINST "#!/bin/sh\nset -e\n\n";
-      print PREUNINST $preuninstscript;
-      close PREUNINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
-    }
-    if ($postuninstscript ne '') {
-      open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
-      print POSTUNINST "#!/bin/sh\nset -e\n\n";
-      print POSTUNINST $postuninstscript;
-      close POSTUNINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
+    # Can't see much point in scripts on subpackages... although since
+    # it's *possible* I should support it at some point.
+    if ($pkg eq 'main') {
+      if ($preinstscript ne '') {
+	open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
+	print PREINST "#!/bin/sh\nset -e\n\n";
+	print PREINST $preinstscript;
+	close PREINST;
+	`chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
+      }
+      if ($postinstscript ne '') {
+	open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
+	print POSTINST "#!/bin/sh\nset -e\n\n";
+	print POSTINST $postinstscript;
+	close POSTINST;
+	`chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
+      }
+      if ($preuninstscript ne '') {
+	open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
+	print PREUNINST "#!/bin/sh\nset -e\n\n";
+	print PREUNINST $preuninstscript;
+	close PREUNINST;
+	`chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
+      }
+      if ($postuninstscript ne '') {
+	open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
+	print POSTUNINST "#!/bin/sh\nset -e\n\n";
+	print POSTUNINST $postuninstscript;
+	close POSTUNINST;
+	`chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
+      }
     }
 
 #print `ls -l $buildroot/DEBIAN`;
