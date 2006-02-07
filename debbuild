@@ -681,6 +681,7 @@ sub binpackage {
     # it's *possible* I should support it at some point.
     if ($pkg eq 'main') {
       if ($preinstscript ne '') {
+	$preinstscript = expandmacros($preinstscript,'g');
 	open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
 	print PREINST "#!/bin/sh\nset -e\n\n";
 	print PREINST $preinstscript;
@@ -688,6 +689,7 @@ sub binpackage {
 	`chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
       }
       if ($postinstscript ne '') {
+	$postinstscript = expandmacros($postinstscript,'g');
 	open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
 	print POSTINST "#!/bin/sh\nset -e\n\n";
 	print POSTINST $postinstscript;
@@ -695,6 +697,7 @@ sub binpackage {
 	`chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
       }
       if ($preuninstscript ne '') {
+	$preuninstscript = expandmacros($preuninstscript,'g');
 	open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
 	print PREUNINST "#!/bin/sh\nset -e\n\n";
 	print PREUNINST $preuninstscript;
@@ -702,6 +705,7 @@ sub binpackage {
 	`chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
       }
       if ($postuninstscript ne '') {
+	$postuninstscript = expandmacros($postuninstscript,'g');
 	open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
 	print POSTUNINST "#!/bin/sh\nset -e\n\n";
 	print POSTUNINST $postuninstscript;
