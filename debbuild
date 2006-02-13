@@ -133,6 +133,12 @@ if ($cmdopts{type} eq 'b') {
   parse_spec();
 }
 
+# -> srcpkg if -.s
+if ($cmdopts{stage} eq 's') {
+  srcpackage();
+  exit 0;
+}
+
 # Hokay.  Need to:
 # -> prep if -.p OR (-.[cilabs] AND !--short-circuit)
 if ($cmdopts{stage} eq 'p' || ($cmdopts{stage} =~ /[cilabs]/ && $cmdopts{short} ne 'y')) {
@@ -159,10 +165,6 @@ if ($cmdopts{stage} eq 'a') {
 # -> binpkg if -.b
 if ($cmdopts{stage} eq 'b') {
   binpackage();
-}
-# -> srcpkg if -.s
-if ($cmdopts{stage} eq 's') {
-  srcpackage();
 }
 
 # Just in case.
@@ -742,7 +744,31 @@ sub binpackage {
 } # end binpackage()
 
 
-sub srcpackage {}
+## srcpackage()
+# Builds a .src.deb source package.  Note that Debian's idea of
+# a "source package" is seriously flawed IMO, because you can't
+# easily copy it as-is.
+sub srcpackage {
+  # use pax -w [file] [file] ... >outfile.sdeb
+  my $paxcmd = "cd %{_topdir}; pax -w ";
+
+# tweak source entry into usable form.  Need it locally somewhere along the line.
+  (my $pkgsrc = $pkgdata{main}{source}) =~ s|.+/([^/]+)$|$1|;
+  $paxcmd .= "$pkgsrc ";
+
+  # create file list:  Source[nn], Patch[nn]
+  foreach my $specbit (keys %{$pkgdata{main}} ) {
+    next if $specbit eq 'source';
+    $paxcmd .= "$pkgdata{main}{$specbit} " if $specbit =~ /^(source|patch)/;
+  }
+
+  # add the spec file now
+  $paxcmd .= "$specfile > SDEBS/$pkgdata{main}{name}.sdeb";
+
+  $paxcmd = expandmacros($paxcmd,'gp');
+  
+  print "$paxcmd\n";
+}
 
 
 ## expandmacros()
