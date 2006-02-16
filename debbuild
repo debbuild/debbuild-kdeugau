@@ -13,6 +13,7 @@
 use strict;
 use warnings;
 use Fcntl;	# for sysopen flags
+use Cwd 'abs_path';	# for finding where files really are
 
 # regex debugger
 #use re "debug";
@@ -748,26 +749,45 @@ sub binpackage {
 # Builds a .src.deb source package.  Note that Debian's idea of
 # a "source package" is seriously flawed IMO, because you can't
 # easily copy it as-is.
+# Not quite identical to RPM, but Good Enough (TM).
 sub srcpackage {
+  my $pkgsrcname = "$pkgdata{main}{name}-$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb";
+
+  my $paxcmd;
+
+  # We'll definitely need this later, and *may* need it sooner.
+  (my $barespec = $specfile) =~ s|.+/([^/]+)$|$1|;
+
+  # Copy the specfile to the build tree, but only if it's not there already.
+##buglet: need to deal with silly case where silly user has put the spec
+# file in a subdir of %{_topdir}/SPECS.  Ewww.  Silly user!
+  if (abs_path($specfile) !~ /^$topdir\/SPECS/) {
+    $paxcmd .= "cp $specfile %{_topdir}/SPECS/; \n"
+  }
+
   # use pax -w [file] [file] ... >outfile.sdeb
-  my $paxcmd = "cd %{_topdir}; pax -w ";
+  $paxcmd = "cd $topdir; pax -w ";
 
 # tweak source entry into usable form.  Need it locally somewhere along the line.
   (my $pkgsrc = $pkgdata{main}{source}) =~ s|.+/([^/]+)$|$1|;
-  $paxcmd .= "$pkgsrc ";
+  $paxcmd .= "SOURCES/$pkgsrc ";
 
   # create file list:  Source[nn], Patch[nn]
   foreach my $specbit (keys %{$pkgdata{main}} ) {
     next if $specbit eq 'source';
-    $paxcmd .= "$pkgdata{main}{$specbit} " if $specbit =~ /^(source|patch)/;
+    $paxcmd .= "SOURCES/$pkgdata{main}{$specbit} " if $specbit =~ /^(source|patch)/;
+##buglet: need to deal with case where patches are listed as URLs?
+#  or other extended pathnames?  Silly !@$%^&!%%!%!! user!
   }
 
-  # add the spec file now
-  $paxcmd .= "$specfile > SDEBS/$pkgdata{main}{name}.sdeb";
+  # add the spec file, source package destination, and cd back where we came from.
+  $paxcmd .= "SPECS/$barespec > $topdir/SDEBS/$pkgsrcname; cd -";
 
+  # In case of %-macros...
   $paxcmd = expandmacros($paxcmd,'gp');
   
-  print "$paxcmd\n";
+  system "$paxcmd";
+  print "Wrote source package $pkgsrcname in $topdir/SDEBS.\n";
 }
 
 
