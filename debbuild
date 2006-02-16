@@ -455,12 +455,38 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	if ($1) {	# Magic to add entries to the right list of files
 	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$pkgdata{main}{name}-$1"; }
 	}
+
+	# Set this now, so it can be flipped a bit later, and used much later.
+	#$pkgdata{$pkgname}{conffiles} = 0;
+
 	while (<SPECFILE>) {
 	  chomp;
 	  # need to update this to deal (properly) with %dir, %attr, etc
 	  next if /^\%dir/;
 	  next if /^\%attr/;
 	  next if /^\%defattr/;
+
+	  # Debian dpkg doesn't speak "%docdir".  Meh.
+	  next if /^\%docdir/;
+
+	  # Conffiles.  Note that Debian and RH have similar, but not
+	  # *quite* identical ideas of what constitutes a conffile.  Nrgh.
+	  if (/^\%config\s+(.+)$/) {
+	    $pkgdata{$pkgname}{conffiles} = 1;	# Flag it for later
+	    my $tmp = $1;	# Now we can mangleificationate it.  And we probably need to.  :/
+	    if ($tmp !~ /\s+/) {
+	      # Simplest case, just a file.  Whew.
+	      push @{$pkgdata{$pkgname}{conflist}}, $tmp;
+	      $filelist{$pkgname} .= " $tmp";
+	    } else {
+	      # Wot?  Spaces?  That means extra %-macros.  Which, for the most part, can be ignored.
+	      ($tmp) = ($tmp =~ /.+\s([^\s]+)/);  # Strip everything before the last space
+	      $tmp = expandmacros($tmp, 'gp');  # Expand common macros
+	      push @{$pkgdata{$pkgname}{conflist}}, $tmp;
+	      $filelist{$pkgname} .= " $tmp";
+	    }
+	    next;
+	  }
 
 	  # and finally we can fall through %{_<FHS>}-prefixed locations...
 	  if (/^\%\{_/) {
@@ -644,6 +670,7 @@ sub binpackage {
 
     my @pkgfilelist = split ' ', $filelist{$pkg};
     foreach my $pkgfile (@pkgfilelist) {
+      $pkgfile = expandmacros($pkgfile, 'gp');
       my @filepath = ($pkgfile =~ m|(.+)/([^/]+)$|);
       qx { mkdir -p $buildroot/$pkg$filepath[0] }
 	if $filepath[0] ne '';
@@ -679,6 +706,16 @@ sub binpackage {
     open CONTROL, ">$buildroot/$pkg/DEBIAN/control";
     print CONTROL $control;
     close CONTROL;
+
+    # Iff there are conffiles (as specified in the %files list(s), add'em
+    # in so dpkg-deb can tag them.
+    if ($pkgdata{$pkg}{conffiles}) {
+      open CONFLIST, ">$buildroot/$pkg/DEBIAN/conffiles";
+      foreach my $conffile (@{$pkgdata{$pkg}{conflist}}) {
+	print CONFLIST "$conffile\n";
+      }
+      close CONFLIST;
+    }
 
     # Can't see much point in scripts on subpackages... although since
     # it's *possible* I should support it at some point.
