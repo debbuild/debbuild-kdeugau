@@ -93,12 +93,14 @@ q(
 # Package data
 # This is the form of $pkgdata{pkgname}{meta}
 # meta includes Summary, Name, Version, Release, Group, Copyright,
-#	Source, URL, Packager, BuildRoot, Description
+#	Source, URL, Packager, BuildRoot, Description, BuildReq(uires),
+#	Requires, Provides
 # 10/31/2005 Maybe this should be flatter?  -kgd
 my %pkgdata;
 my @pkglist = ('main');	#sigh
 # Files listing.  Embedding this in %pkgdata would be, um, messy.
 my %filelist;
+my $buildreq;
 
 # Scriptlets
 my $prepscript;
@@ -132,6 +134,8 @@ if ($cmdopts{type} eq 'b') {
   # Need to read the spec file to find the tarball.  Note that
   # this also generates most of the shell script required.
   parse_spec();
+  die "Can't build $pkgdata{main}{name}:  build requirements not met.\n"
+    if !checkbuildreq();
 }
 
 # -> srcpkg if -.s
@@ -340,7 +344,7 @@ LINE: while (<SPECFILE>) {
 	$pkgdata{$subname}{version} = $pkgdata{main}{version};
 	while (<SPECFILE>) {
 	  redo LINE if /^\%/;
-	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version):\s+(.+)$/i)) {
+	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides):\s+(.+)$/i)) {
 	    $dname =~ tr/[A-Z]/[a-z]/;
 	    $pkgdata{$subname}{$dname} = $dvalue;
 	  }
@@ -546,6 +550,12 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  my @patchbits = split '/', $pkgdata{main}{$patchname};
 	  $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
 	}
+      } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
+	$buildreq .= ", $1";
+      } elsif (/^requires:\s+(.+)/i) {
+	$pkgdata{main}{requires} .= ", $1";
+      } elsif (/^provides:\s+(.+)/i) {
+	$pkgdata{main}{provides} .= ", $1";
       }
 #Name: suwrap
 #Version: 0.04
@@ -677,6 +687,14 @@ sub binpackage {
       qx { mv $buildroot$pkgfile $buildroot/$pkg$filepath[0] };
     }
 
+    # Get the "Depends" (Requires) a la RPM.  Ish.  We strip the leading
+    # comma and space here (if needed) in case there were "Requires" specified
+    # in the spec file - those would precede these.
+    ($pkgdata{$pkg}{depends} .= getreqs("$buildroot/$pkg")) =~ s/^, //;
+
+    # Do this here since we're doing {depends}...
+    $pkgdata{$pkg}{provides} =~ s/^, //;
+
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
 
@@ -700,6 +718,8 @@ sub binpackage {
 	"Priority: optional\n".
 	"Architecture: i386\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
+	"Depends: $pkgdata{$pkg}{depends}\n".
+	"Provides: $pkgdata{$pkg}{provides}\n".
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
 
@@ -826,6 +846,106 @@ sub srcpackage {
   system "$paxcmd";
   print "Wrote source package $pkgsrcname in $topdir/SDEBS.\n";
 }
+
+
+## checkbuildreq()
+# Checks the build requirements (if any)
+# Spits out a rude warning and returns a true-false error if any
+# requirements are not met.
+sub checkbuildreq {
+  return 0 if $buildreq eq '';	# No use doing extra work.
+
+  my $reqflag = 1;  # unset iff a buildreq is missing
+
+  $buildreq =~ s/^, //;	# Strip the leading comma and space
+  my @reqlist = split /,\s+/, $buildreq;
+
+  foreach my $req (@reqlist) {
+    my ($pkg,$rel,$ver);
+
+    # We have two classes of requirements - versioned and unversioned.
+    if ($req =~ /[><=]/) {
+      # Pick up the details of versioned buildreqs
+      ($pkg,$rel,$ver) = ($req =~ /([a-z0-9._-]+)\s+([><=]+)\s+([a-z0-9._-]+)/);
+    } else {
+      # And the unversioned ones.
+      $pkg = $req;
+      $rel = '>=';
+      $ver = 0;
+    }
+
+    my @pkglist = qx { dpkg-query --showformat '\${status}\t\${version}\n' -W $pkg };
+# need to check if no lines returned - means a bad buildreq
+    my ($reqstat,undef,undef,$reqver) = split /\s+/, $pkglist[0];
+    if ($reqstat !~ /install/) {
+      print " * Missing build-dependency $pkg!\n";
+      $reqflag = 0;
+    } else {
+# gotta be a better way to do this... :/
+      if ($rel eq '>=' && !($reqver ge $ver)) {
+	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
+	$reqflag = 0;
+      }
+      if ($rel eq '>' && !($reqver gt $ver)) {
+	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
+	$reqflag = 0;
+      }
+      if ($rel eq '<=' && !($reqver le $ver)) {
+	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
+	$reqflag = 0;
+      }
+      if ($rel eq '<' && !($reqver lt $ver)) {
+	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
+	$reqflag = 0;
+      }
+      if ($rel eq '=' && !($reqver eq $ver)) {
+	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
+	$reqflag = 0;
+      }
+    } # end not installed/installed check
+  } # end req loop
+
+  return $reqflag;
+} # end checkbuildreq()
+
+
+## getreqs()
+# Find out which libraries/packages are required for any
+# executables and libs in a given file tree.
+# (Debian doesn't have soname-level deps;  just package-level)
+sub getreqs() {
+  my $pkgtree = $_[0];
+
+  print "checking reqs on executables in $pkgtree...\n";
+  my @reqlist = qx { find $pkgtree -type f -perm 755 | grep -v $pkgtree/etc | xargs ldd };
+
+  my %reqs;
+  my $reqlibs;
+
+  foreach (@reqlist) {
+    next if /^$pkgtree/;
+    next if m|/lib/ld-linux.so|;
+    my ($req) = (/^\s+([a-z0-9._-]+)/);
+
+    $reqlibs .= " $req";
+  }
+
+  foreach (qx { dpkg -S $reqlibs }) {
+    my ($libpkg,undef) = split /:\s+/;
+    $reqs{$libpkg} = 1;
+  }
+
+  my $deplist;
+  foreach (keys %reqs) {
+    $deplist .= ", $_";
+  }
+
+# For now, we're done.  We're not going to meddle with versions yet.
+# Among other things, it's messier than handling "simple" yes/no "do
+# we have this lib?" deps.  >:(
+
+  return $deplist;
+} # end getreqs()
 
 
 ## expandmacros()
@@ -956,6 +1076,10 @@ sub expandmacros {
 
   return $macrostring;
 } # end expandmacros()
+
+
+
+__END__
 
 
 
