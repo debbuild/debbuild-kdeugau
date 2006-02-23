@@ -908,7 +908,7 @@ sub getreqs() {
   my $pkgtree = $_[0];
 
   print "Checking library requirements...\n";
-  my @binlist = qx { find $pkgtree -type f -perm 755 | grep -v $pkgtree/etc };
+  my @binlist = qx { find $pkgtree -type f -perm 755 };
 
   if (scalar(@binlist) == 0) {
     return '';
@@ -929,7 +929,7 @@ sub getreqs() {
   }
 
   my %reqs;
-  my $reqlibs;
+  my $reqlibs = '';
 
   foreach (@reqlist) {
     next if /^$pkgtree/;
@@ -947,12 +947,14 @@ sub getreqs() {
     $reqlibs .= " $req";
   }
 
-  foreach (qx { dpkg -S $reqlibs }) {
-    my ($libpkg,undef) = split /:\s+/;
-    $reqs{$libpkg} = 1;
+  if ($reqlibs ne '') {
+    foreach (qx { dpkg -S $reqlibs }) {
+      my ($libpkg,undef) = split /:\s+/;
+      $reqs{$libpkg} = 1;
+    }
   }
 
-  my $deplist;
+  my $deplist = '';
   foreach (keys %reqs) {
     $deplist .= ", $_";
   }
