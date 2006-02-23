@@ -670,7 +670,6 @@ sub binpackage {
     mkdir "$topdir/DEBS/i386";
   }
 
-##work
   foreach my $pkg (@pkglist) {
 
     # Gotta do this first, otherwise we don't have a place to move files from %files
@@ -694,7 +693,10 @@ sub binpackage {
     ($pkgdata{$pkg}{depends} .= getreqs("$buildroot/$pkg")) =~ s/^, //;
 
     # Do this here since we're doing {depends}...
-    $pkgdata{$pkg}{provides} =~ s/^, // if defined($pkgdata{$pkg}{provides});
+    if (defined($pkgdata{$pkg}{provides})) {
+      $pkgdata{$pkg}{provides} =~ s/^, //;
+      $pkgdata{$pkg}{provides} = expandmacros($pkgdata{$pkg}{provides},'gp');
+    }
 
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
@@ -719,7 +721,7 @@ sub binpackage {
 	"Priority: optional\n".
 	"Architecture: i386\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
-	"Depends: $pkgdata{$pkg}{depends}\n".
+	( $pkgdata{$pkg}{depends} ne '' ? "Depends: $pkgdata{$pkg}{depends}\n" : '' ).
 	( defined($pkgdata{$pkg}{provides}) ? "Provides: $pkgdata{$pkg}{provides}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
@@ -774,21 +776,6 @@ sub binpackage {
 	`chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
       }
     }
-
-#print `ls -l $buildroot/DEBIAN`;
-
-#Package: httpd
-#Version: 2.0.54-7via
-#Section: unknown
-#Priority: optional
-#Architecture: i386
-#Depends: libc6 (>= 2.3.2.ds1-21), libdb4.2, libexpat1 (>= 1.95.8), libssl0.9.7, libapr0
-#Replaces: apache2
-#Installed-Size: 3076
-#Maintainer: Kris Deugau <kdeugau@vianet.ca>
-#Description: apache2 for ViaNet
-# apache2 for ViaNet.  Includes per-vhost setuid patches from
-# http://home.samfundet.no/~sesse/mpm-itk/.
 
     # execute
     print "Calling package creation script $debscriptfile for $pkgdata{$pkg}{name}...\n";
@@ -914,19 +901,47 @@ sub checkbuildreq {
 # Find out which libraries/packages are required for any
 # executables and libs in a given file tree.
 # (Debian doesn't have soname-level deps;  just package-level)
+# Returns an empty string if the tree contains no binaries.
+# Doesn't work well on shell scripts. but those *should* be
+# fine anyway.  (Yeah, right...)
 sub getreqs() {
   my $pkgtree = $_[0];
 
   print "Checking library requirements...\n";
-  my @reqlist = qx { find $pkgtree -type f -perm 755 | grep -v $pkgtree/etc | xargs ldd };
+  my @binlist = qx { find $pkgtree -type f -perm 755 | grep -v $pkgtree/etc };
+
+  if (scalar(@binlist) == 0) {
+    return '';
+  }
+
+  my @reqlist;
+  foreach (@binlist) {
+    push @reqlist, qx { ldd $_ };
+  }
+
+  # Get the list of libs provided by this package.  Still doesn't
+  # handle the case where the lib gets stuffed into a subpackage.  :/
+  my @intprovlist = qx { find $pkgtree -type f -name "*.so*" };
+  my $provlist = '';
+  foreach (@intprovlist) {
+    s/$pkgtree//;
+    $provlist .= "$_";
+  }
 
   my %reqs;
   my $reqlibs;
 
   foreach (@reqlist) {
     next if /^$pkgtree/;
-    next if m|/lib/ld-linux.so|;
-    my ($req) = (/^\s+([a-z0-9._-]+)/);
+    next if m|/lib/ld-linux.so|;	# Hack! Hack!  PTHBTT!  (libc suxx0rz)
+
+    my ($req) = (/^\s+([a-z0-9._-]+)/); # dig out the actual library (so)name
+
+    # Ignore libs provided by this package.  Note that we don't match
+    # on word-boundary at the *end* of the lib we're looking for, as the
+    # looked-for lib may not have the full soname version. (ie, it may
+    # "just" point to one of the symlinks that get created somewhere.)
+    next if $provlist =~ /\b$req/;
 
     $reqlibs .= " $req";
   }
