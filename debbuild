@@ -933,6 +933,7 @@ sub getreqs() {
 
   foreach (@reqlist) {
     next if /^$pkgtree/;
+    next if /not a dynamic executable/;
     next if m|/lib/ld-linux.so|;	# Hack! Hack!  PTHBTT!  (libc suxx0rz)
 
     my ($req) = (/^\s+([a-z0-9._-]+)/); # dig out the actual library (so)name
