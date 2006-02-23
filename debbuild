@@ -100,7 +100,7 @@ my %pkgdata;
 my @pkglist = ('main');	#sigh
 # Files listing.  Embedding this in %pkgdata would be, um, messy.
 my %filelist;
-my $buildreq;
+my $buildreq = '';
 
 # Scriptlets
 my $prepscript;
@@ -854,7 +854,7 @@ sub srcpackage {
 # Spits out a rude warning and returns a true-false error if any
 # requirements are not met.
 sub checkbuildreq {
-  return 0 if $buildreq eq '';	# No use doing extra work.
+  return 1 if $buildreq eq '';	# No use doing extra work.
 
   my $reqflag = 1;  # unset iff a buildreq is missing
 
