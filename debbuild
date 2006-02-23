@@ -332,6 +332,7 @@ LINE: while (<SPECFILE>) {
 	  if (/-n/) { $subname = $1; } else { $subname = "$pkgdata{main}{name}-$1"; }
 	}
         while (<SPECFILE>) {
+	  next if /^#/;    # Messy.  Should be possible to do better.  :/
           redo LINE if /^\%/;
           $pkgdata{$subname}{desc} .= " $_";
         }
@@ -693,7 +694,7 @@ sub binpackage {
     ($pkgdata{$pkg}{depends} .= getreqs("$buildroot/$pkg")) =~ s/^, //;
 
     # Do this here since we're doing {depends}...
-    $pkgdata{$pkg}{provides} =~ s/^, //;
+    $pkgdata{$pkg}{provides} =~ s/^, // if defined($pkgdata{$pkg}{provides});
 
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
@@ -719,7 +720,7 @@ sub binpackage {
 	"Architecture: i386\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
 	"Depends: $pkgdata{$pkg}{depends}\n".
-	"Provides: $pkgdata{$pkg}{provides}\n".
+	( defined($pkgdata{$pkg}{provides}) ? "Provides: $pkgdata{$pkg}{provides}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
 
@@ -916,7 +917,7 @@ sub checkbuildreq {
 sub getreqs() {
   my $pkgtree = $_[0];
 
-  print "checking reqs on executables in $pkgtree...\n";
+  print "Checking library requirements...\n";
   my @reqlist = qx { find $pkgtree -type f -perm 755 | grep -v $pkgtree/etc | xargs ldd };
 
   my %reqs;
