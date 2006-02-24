@@ -466,6 +466,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 
 	while (<SPECFILE>) {
 	  chomp;
+	  next if /^#/;
 	  # need to update this to deal (properly) with %dir, %attr, etc
 	  next if /^\%dir/;
 	  next if /^\%attr/;
