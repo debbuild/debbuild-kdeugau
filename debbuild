@@ -681,10 +681,10 @@ sub binpackage {
     my @pkgfilelist = split ' ', $filelist{$pkg};
     foreach my $pkgfile (@pkgfilelist) {
       $pkgfile = expandmacros($pkgfile, 'gp');
-      my @filepath = ($pkgfile =~ m|(.+)/([^/]+)$|);
-      qx { mkdir -p $buildroot/$pkg$filepath[0] }
-	if $filepath[0] ne '';
-      qx { mv $buildroot$pkgfile $buildroot/$pkg$filepath[0] };
+      my ($fpath,$fname) = ($pkgfile =~ m|(.+?/?)?([^/]+)$|);	# We don't need $fname now, but we might.
+      qx { mkdir -p $buildroot/$pkg$fpath }
+	if $fpath && $fpath ne '';
+      qx { mv $buildroot$pkgfile $buildroot/$pkg$fpath };
     }
 
     # Get the "Depends" (Requires) a la RPM.  Ish.  We strip the leading
