@@ -691,7 +691,7 @@ sub binpackage {
     # Get the "Depends" (Requires) a la RPM.  Ish.  We strip the leading
     # comma and space here (if needed) in case there were "Requires" specified
     # in the spec file - those would precede these.
-    ($pkgdata{$pkg}{depends} .= getreqs("$buildroot/$pkg")) =~ s/^, //;
+    ($pkgdata{$pkg}{requires} .= getreqs("$buildroot/$pkg")) =~ s/^, //;
 
     # Do this here since we're doing {depends}...
     if (defined($pkgdata{$pkg}{provides})) {
@@ -722,7 +722,7 @@ sub binpackage {
 	"Priority: optional\n".
 	"Architecture: i386\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
-	( $pkgdata{$pkg}{depends} ne '' ? "Depends: $pkgdata{$pkg}{depends}\n" : '' ).
+	( $pkgdata{$pkg}{requires} ne '' ? "Depends: $pkgdata{$pkg}{requires}\n" : '' ).
 	( defined($pkgdata{$pkg}{provides}) ? "Provides: $pkgdata{$pkg}{provides}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
