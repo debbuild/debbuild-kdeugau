@@ -480,6 +480,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  if (/^\%config\s+(.+)$/) {
 	    $pkgdata{$pkgname}{conffiles} = 1;	# Flag it for later
 	    my $tmp = $1;	# Now we can mangleificationate it.  And we probably need to.  :/
+	    $tmp = expandmacros($tmp, 'gp');  # Expand common macros
 	    if ($tmp !~ /\s+/) {
 	      # Simplest case, just a file.  Whew.
 	      push @{$pkgdata{$pkgname}{conflist}}, $tmp;
@@ -487,7 +488,6 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	    } else {
 	      # Wot?  Spaces?  That means extra %-macros.  Which, for the most part, can be ignored.
 	      ($tmp) = ($tmp =~ /.+\s([^\s]+)/);  # Strip everything before the last space
-	      $tmp = expandmacros($tmp, 'gp');  # Expand common macros
 	      push @{$pkgdata{$pkgname}{conflist}}, $tmp;
 	      $filelist{$pkgname} .= " $tmp";
 	    }
@@ -508,7 +508,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  # ... and "normal" files
 	  $filelist{$pkgname} .= " $_";
 	}
-	$filelist{$pkgname} = expandmacros($filelist{$pkgname}, 'g');
+	$filelist{$pkgname} = expandmacros($filelist{$pkgname}, 'gp');
       } # done %file section
 
       if (/^\%changelog/) {
