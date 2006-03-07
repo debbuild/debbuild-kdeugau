@@ -103,12 +103,12 @@ my %filelist;
 my $buildreq = '';
 
 # Scriptlets
-my $prepscript;
-my $buildscript;
+my $prepscript = '';
+my $buildscript = '';
 # %install doesn't need the full treatment from %clean;  just an empty place to install to.
 # NB - rpm doesn't do this;  is it really necessary?
 my $installscript = '[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT'."\n";
-my $cleanscript;
+my $cleanscript = '';
 # pre/post (un)install scripts.  Note that these will likely barf as-is.  :/
 my $preinstscript = '';
 my $postinstscript = '';
