@@ -130,6 +130,14 @@ if (defined $ENV{TMP} && $ENV{TMP} =~ /^(\/var)?\/tmp$/) {
 load_userconfig();
 parse_cmd();
 
+if ($cmdopts{install}) {
+  install_sdeb();
+  exit 0;
+}
+
+# Stick --rebuild handling in here - basically install_sdeb()
+# followed by tweaking options to run with -ba
+
 if ($cmdopts{type} eq 'b') {
   # Need to read the spec file to find the tarball.  Note that
   # this also generates most of the shell script required.
@@ -235,6 +243,9 @@ sub parse_cmd {
 	  }
 	} elsif (/^-v/) {
 	  # bump verbosity.  Not sure what I'll actually do here...
+	} elsif (/^-i/) {
+	  $cmdopts{install} = 1;
+	  $prevopt = '-i';
 	} else {
 	  die "Bad option $_\n";
 	}
@@ -248,12 +259,15 @@ sub parse_cmd {
       # on which one we meet.
       if ($prevopt eq '--buildroot') {
 	$cmdbuildroot = $_;
+      } elsif ($prevopt eq '-i') {
+	$srcpkg = $_;
       } else {
 	if ($cmdopts{type} eq 's') {
 	  # Source package
- 	  if (!/\.src\.(deb|rpm)$/) {
+ 	  if (!/(sdeb|\.src\.rpm)$/) {
 	    die "Can't --rebuild with $_\n";
 	  }
+          $srcpkg = $_;
 	} elsif ($cmdopts{type} eq 'b') {
 	  $specfile = $_;
 	  # Spec file
@@ -968,6 +982,19 @@ sub getreqs() {
 
   return $deplist;
 } # end getreqs()
+
+
+## install_sdeb()
+# Extracts .sdeb contents to %_topdir as appropriate
+sub install_sdeb {
+  my $paxcmd = "cd $topdir; pax -r <$srcpkg; cd -";
+
+  # In case of %-macros...
+  $paxcmd = expandmacros($paxcmd,'gp');
+  
+  system "$paxcmd";
+  print "Extracted source package $srcpkg to $topdir.\n";
+} # end install_sdeb()
 
 
 ## expandmacros()
