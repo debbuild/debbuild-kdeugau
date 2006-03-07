@@ -329,7 +329,8 @@ LINE: while (<SPECFILE>) {
       if (/^\%description(?:\s+(?:-n\s+)?([a-zA-Z0-9_.-]+))?/) {
 	my $subname = "main";
 	if ($1) {
-	  if (/-n/) { $subname = $1; } else { $subname = "$pkgdata{main}{name}-$1"; }
+	  my $tmp = $1;
+	  if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
 	}
         while (<SPECFILE>) {
 	  next if /^#/;    # Messy.  Should be possible to do better.  :/
@@ -338,8 +339,8 @@ LINE: while (<SPECFILE>) {
         }
       }
       if (/^\%package\s+(?:-n\s+)?([a-zA-Z0-9_.-]+)/) {
-	my $subname;
-	if (/-n/) { $subname = $1; } else { $subname = "$pkgdata{main}{name}-$1"; }
+	my $subname = $1;
+	if (! /-n/) { $subname = "$pkgdata{main}{name}-$1"; }
 	push @pkglist, $subname;
 	$pkgdata{$subname}{name} = $subname;
 	$pkgdata{$subname}{version} = $pkgdata{main}{version};
@@ -458,7 +459,8 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9]+))?/) {
 	my $pkgname = 'main';
 	if ($1) {	# Magic to add entries to the right list of files
-	  if (/-n/) { $pkgname = $1; } else { $pkgname = "$pkgdata{main}{name}-$1"; }
+	  my $tmp = $1;
+	  if (/-n/) { $pkgname = $tmp; } else { $pkgname = "$pkgdata{main}{name}-$tmp"; }
 	}
 
 	# Set this now, so it can be flipped a bit later, and used much later.
