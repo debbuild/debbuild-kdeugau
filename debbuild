@@ -574,6 +574,8 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	$pkgdata{main}{requires} .= ", $1";
       } elsif (/^provides:\s+(.+)/i) {
 	$pkgdata{main}{provides} .= ", $1";
+      } elsif (/^conflicts:\s+(.+)/i) {
+	$pkgdata{main}{conflicts} .= ", $1";
       }
 #Name: suwrap
 #Version: 0.04
@@ -714,6 +716,10 @@ sub binpackage {
       $pkgdata{$pkg}{provides} =~ s/^, //;
       $pkgdata{$pkg}{provides} = expandmacros($pkgdata{$pkg}{provides},'gp');
     }
+    if (defined($pkgdata{$pkg}{conflicts})) {
+      $pkgdata{$pkg}{conflicts} =~ s/^, //;
+      $pkgdata{$pkg}{conflicts} = expandmacros($pkgdata{$pkg}{conflicts},'gp');
+    }
 
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
@@ -740,6 +746,7 @@ sub binpackage {
 	"Maintainer: $pkgdata{main}{packager}\n".
 	( $pkgdata{$pkg}{requires} ne '' ? "Depends: $pkgdata{$pkg}{requires}\n" : '' ).
 	( defined($pkgdata{$pkg}{provides}) ? "Provides: $pkgdata{$pkg}{provides}\n" : '' ).
+	( defined($pkgdata{$pkg}{conflicts}) ? "Conflicts: $pkgdata{$pkg}{conflicts}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
 
