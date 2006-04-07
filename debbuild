@@ -867,6 +867,13 @@ sub srcpackage {
 sub checkbuildreq {
   return 1 if $buildreq eq '';	# No use doing extra work.
 
+  if ( ! -e "/usr/bin/dpkg-query" ) {
+    print "**WARNING**  dpkg-query not found.  Can't check build-deps.\n".
+	"  Required for sucessful build:\n".$buildreq."\n".
+	"  Continuing anyway.\n";
+    return 1;
+  }
+
   my $reqflag = 1;  # unset iff a buildreq is missing
 
   $buildreq =~ s/^, //;	# Strip the leading comma and space
