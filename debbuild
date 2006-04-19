@@ -137,6 +137,18 @@ if ($cmdopts{install}) {
 
 # Stick --rebuild handling in here - basically install_sdeb()
 # followed by tweaking options to run with -ba
+if ($cmdopts{type} eq 's') {
+  install_sdeb();
+  my @srclist = qx { pax < $srcpkg };
+  $cmdopts{type} = 'b';
+  $cmdopts{stage} = 'a';
+  foreach (@srclist) {
+    if (/SPECS/) {
+      chomp;
+      $specfile = "$topdir/$_";
+    }
+  }
+}
 
 if ($cmdopts{type} eq 'b') {
   # Need to read the spec file to find the tarball.  Note that
@@ -820,6 +832,8 @@ sub binpackage {
 # easily copy it as-is.
 # Not quite identical to RPM, but Good Enough (TM).
 sub srcpackage {
+  # In case we were called with -bs.
+  $pkgdata{main}{name} =~ tr/_/-/;
   my $pkgsrcname = "$pkgdata{main}{name}-$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb";
 
   my $paxcmd;
