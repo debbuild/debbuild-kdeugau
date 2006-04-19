@@ -9,6 +9,7 @@
 # SVN revision $Rev$
 # Last update by $Author$
 ###
+# Copyright 2005,2006 Kris Deugau <kdeugau@deepnet.cx>
 
 use strict;
 use warnings;
@@ -138,16 +139,23 @@ if ($cmdopts{install}) {
 # Stick --rebuild handling in here - basically install_sdeb()
 # followed by tweaking options to run with -ba
 if ($cmdopts{type} eq 's') {
-  install_sdeb();
-  my @srclist = qx { pax < $srcpkg };
-  $cmdopts{type} = 'b';
-  $cmdopts{stage} = 'a';
-  foreach (@srclist) {
-    if (/SPECS/) {
+  if ($srcpkg =~ /\.src\.rpm$/) {
+    @srclist = qx { rpm -qlp $srcpkg };
+    foreach (@srclist) {
       chomp;
-      $specfile = "$topdir/$_";
+      $specfile = "$topdir/SPECS/$_" if /\.spec$/;
+    }
+    qx { rpm -i $srcpkg };
+  } else {
+    install_sdeb();
+    my @srclist = qx { pax < $srcpkg };
+    foreach (@srclist) {
+      chomp;
+      $specfile = "$topdir/$_" if /SPECS/;
     }
   }
+  $cmdopts{type} = 'b';
+  $cmdopts{stage} = 'a';
 }
 
 if ($cmdopts{type} eq 'b') {
@@ -1174,18 +1182,62 @@ debbuild - Build Debian-compatible packages from RPM spec files
 
  debbuild {-ta|-tb|-tp|-tc|-ti|-tl|-ts} [build-options] file.tar.{gz|bz2}
 
- debbuild --rebuild file.src.{rpm|deb}
+ debbuild --rebuild file.{src.rpm|sdeb}
 
 =head1 DESCRIPTION
 
-This script attempts to build Debian-friendly semi-native packages
-from RPM spec files, RPM-friendly tarballs, and RPM source packages
-(.src.rpm).  It accepts I<most> of the options rpmbuild does, and
-should be able to interpret most spec files usefully.  Perl modules
-should be handled via CPAN+dh-make-perl instead;  Debian's conventions
-for such things do not lend themselves to automated conversion.
+This script attempts to build Debian-friendly semi-native packages from RPM spec files, 
+RPM-friendly tarballs, and RPM source packages (.src.rpm files).  It accepts I<most> of the 
+options rpmbuild does, and should be able to interpret most spec files usefully.  Perl 
+modules should be handled via CPAN+dh-make-perl instead;  Debian's conventions for such 
+things do not lend themselves to automated conversion.
 
-As far as possible, the command-line options are identical to those
-from rpmbuild, although several rpmbuild options are not supported.
+As far as possible, the command-line options are identical to those from rpmbuild, although 
+several rpmbuild options are not supported.
+
+=head1 ASSUMPTIONS
+
+As with rpmbuild, debbuild makes some assumptions about your system.
+
+=over 4
+
+=item *
+
+Either you have rights to do as you please under /usr/src/debian, or you have created a file 
+~/.debmacros containing a suitable %_topdir definition.
+
+Where rpmbuild requires %_topdir/{BUILD,RPMS,SOURCES,SPECS,SRPMS} directories, debbuild  
+requires %_topdir/{BUILD,DEBS,SOURCES,SPECS,SDEBS} directories.  Create them in advance;  
+some subdirectories are created automatically as needed, but most are not.
+
+=item *
+
+/var/tmp must allow script execution - rpmbuild and debbuild both rely on creating and 
+executing shell scripts for much of their functionality.  By default, debbuild also creates 
+install trees under /var/tmp - however this is (almost) entirely under the control of the 
+package's .spec file.
+
+=item *
+  
+If you wish to --rebuild a .src.rpm, your %_topdir for both debbuild and rpmbuild must either 
+match, or be suitably symlinked one direction or another so that both programs are effectively 
+working in the same tree.  (Or you could just manually wrestle files around your system.)
+
+You could symlink ~/.rpmmacros to ~/.debmacros (or vice versa) and save yourself some hassle 
+if you need to rebuild .src.rpm packages on a regular basis.  Currently debbuild only uses the 
+%_topdir macro definition, although there are many more things that rpmbuild can use from 
+~/.rpmmacros.
+
+=back
+
+=head1 SEE ALSO
+
+rpm(8), rpmbuild(8), and pretty much any document describing how to write a .spec file
+
+=head1 BUGS
+
+Probably plenty.  If you see something objectionable in debbuild's behaviour, report it.  
+Send a patch if you feel inspired.  I don't promise I'll do anything other than say "Yup, 
+that's broken." or "Got your message.".
 
 =cut
