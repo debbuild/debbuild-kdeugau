@@ -1207,7 +1207,25 @@ modules should be handled via CPAN+dh-make-perl instead;  Debian's conventions f
 things do not lend themselves to automated conversion.
 
 As far as possible, the command-line options are identical to those from rpmbuild, although 
-several rpmbuild options are not supported.
+several rpmbuild options are not supported:
+
+ --recompile
+ --showrc
+ --buildroot
+ --clean
+ --nobuild
+ --rmsource
+ --rmspec
+ --sign
+ --target
+
+Some of these could probably be trivially added.  Feel free to send me a patch.  ;)
+
+Complex spec files will most likely not work well, if at all.  Rewrite them from scratch - 
+you'll have to make heavy modifications anyway.
+
+If you see something you don't like, mail me.  Send a patch if you feel inspired.  I don't 
+promise I'll do anything other than say "Yup, that's broken" or "Got your message".
 
 =head1 ASSUMPTIONS
 
@@ -1220,8 +1238,9 @@ As with rpmbuild, debbuild makes some assumptions about your system.
 Either you have rights to do as you please under /usr/src/debian, or you have created a file 
 ~/.debmacros containing a suitable %_topdir definition.
 
-Where rpmbuild requires %_topdir/{BUILD,RPMS,SOURCES,SPECS,SRPMS} directories, debbuild  
-requires %_topdir/{BUILD,DEBS,SOURCES,SPECS,SDEBS} directories.  Create them in advance;  
+Both rpmbuild and debbuild require the directories %_topdir/{BUILD,SOURCES,SPECS}.  However, 
+where rpmbuild requires the %_topdir/{RPMS,SRPMS} directories, debbuild  
+requires %_topdir/{DEBS,SDEBS} instead.  Create them in advance;  
 some subdirectories are created automatically as needed, but most are not.
 
 =item *
@@ -1244,14 +1263,28 @@ if you need to rebuild .src.rpm packages on a regular basis.  Currently debbuild
 
 =back
 
-=head1 SEE ALSO
+=head1 AUTHOR
 
-rpm(8), rpmbuild(8), and pretty much any document describing how to write a .spec file
+debbuild was written by Kris Deugau <kdeugau@deepnet.cx>.  A version that approximates 
+current is available at http://www.deepnet.cx/debbuild/.
 
 =head1 BUGS
 
-Probably plenty.  If you see something objectionable in debbuild's behaviour, report it.  
-Send a patch if you feel inspired.  I don't promise I'll do anything other than say "Yup, 
-that's broken." or "Got your message.".
+Funky Things Happen if you forget a command-line option or two.  I've been too lazy to bother 
+fixing this.
+
+Many macro expansions are unsupported or incompletely supported.
+
+The generated scriptlets don't quite match those from rpmbuild exactly.  There are extra 
+environment variables and preprocessing that I haven't needed (yet).
+
+Dcumentation, such as it is, will likely remain perpetually out of date.
+
+%_topdir and the five "working" directories under %_topdir could arguably be created by 
+debbuild.  However, rpmbuild doesn't create these directories either.
+
+=head1 SEE ALSO
+
+rpm(8), rpmbuild(8), and pretty much any document describing how to write a .spec file.
 
 =cut
