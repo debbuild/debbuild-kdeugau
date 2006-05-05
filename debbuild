@@ -154,7 +154,7 @@ if ($cmdopts{install}) {
 # followed by tweaking options to run with -ba
 if ($cmdopts{type} eq 's') {
   if ($srcpkg =~ /\.src\.rpm$/) {
-    @srclist = qx { rpm -qlp $srcpkg };
+    my @srclist = qx { rpm -qlp $srcpkg };
     foreach (@srclist) {
       chomp;
       $specfile = "$topdir/SPECS/$_" if /\.spec$/;
