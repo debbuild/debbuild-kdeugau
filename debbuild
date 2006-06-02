@@ -589,7 +589,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	$pkgdata{main}{packager} = $1;
       } elsif (/^buildroot:\s+(.+)/i) {
 	$buildroot = $1;
-      } elsif (/^source:\s+(.+)/i) {
+      } elsif (/^source0?:\s+(.+)/i) {
 	$pkgdata{main}{source} = $1;
 	die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
       } elsif (/^source([0-9]+):\s+(.+)/i) {
