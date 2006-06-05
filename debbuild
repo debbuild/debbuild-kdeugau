@@ -374,10 +374,10 @@ LINE: while (<SPECFILE>) {
         $specglobals{$key} = expandmacros($def,'g');
       }
 
-      if (/^\%description(?:\s+(?:-n\s+)?([a-zA-Z0-9_.-]+))?/) {
+      if (/^\%description(?:\s+(?:-n\s+)?(.+))?/) {
 	my $subname = "main";
 	if ($1) {
-	  my $tmp = $1;
+	  my $tmp = expandmacros("$1", 'g');
 	  if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
 	}
         while (<SPECFILE>) {
@@ -386,8 +386,9 @@ LINE: while (<SPECFILE>) {
           $pkgdata{$subname}{desc} .= " $_";
         }
       }
-      if (/^\%package\s+(?:-n\s+)?([a-zA-Z0-9_.-]+)/) {
-	my $subname = $1;
+      if (/^\%package\s+(?:-n\s+)?(.+)/) {
+	# gotta expand %defines here.  Whee.
+	my $subname = expandmacros("$1", 'g');
 	if (! /-n/) { $subname = "$pkgdata{main}{name}-$1"; }
 	push @pkglist, $subname;
 	$pkgdata{$subname}{name} = $subname;
@@ -396,7 +397,7 @@ LINE: while (<SPECFILE>) {
 	  redo LINE if /^\%/;
 	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides):\s+(.+)$/i)) {
 	    $dname =~ tr/[A-Z]/[a-z]/;
-	    $pkgdata{$subname}{$dname} = $dvalue;
+	    $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'g');
 	  }
 	}
       }
@@ -504,10 +505,10 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       }
     # done %pre/%post scripts
 
-      if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9.-]+))?/) {
+      if (/^\%files(?:\s+(?:-n\s+)?(.+))?/) {
 	my $pkgname = 'main';
 	if ($1) {	# Magic to add entries to the right list of files
-	  my $tmp = $1;
+	  my $tmp = expandmacros("$1", 'g');
 	  if (/-n/) { $pkgname = $tmp; } else { $pkgname = "$pkgdata{main}{name}-$tmp"; }
 	}
 
@@ -605,7 +606,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
 	$buildreq .= ", $1";
       } elsif (/^requires:\s+(.+)/i) {
-	$pkgdata{main}{requires} .= ", $1";
+	$pkgdata{main}{requires} .= ", ".expandmacros("$1", 'g');
       } elsif (/^provides:\s+(.+)/i) {
 	$pkgdata{main}{provides} .= ", $1";
       } elsif (/^conflicts:\s+(.+)/i) {
