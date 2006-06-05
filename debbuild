@@ -504,7 +504,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       }
     # done %pre/%post scripts
 
-      if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9]+))?/) {
+      if (/^\%files(?:\s+(?:-n\s+)?([a-zA-z0-9.-]+))?/) {
 	my $pkgname = 'main';
 	if ($1) {	# Magic to add entries to the right list of files
 	  my $tmp = $1;
