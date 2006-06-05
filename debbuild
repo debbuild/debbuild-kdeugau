@@ -370,8 +370,8 @@ LINE: while (<SPECFILE>) {
     if (/^\%/) {
       # A macro that needs further processing.
 
-      if (/^\%define\s+([^\s]+)\s+([^\s]+)/) {
-        $specglobals{$1} = expandmacros($2,'g');
+      if (my ($key, $def) = (/^\%define\s+([^\s]+)\s+(.+)$/) ) {
+        $specglobals{$key} = expandmacros($def,'g');
       }
 
       if (/^\%description(?:\s+(?:-n\s+)?([a-zA-Z0-9_.-]+))?/) {
@@ -1151,6 +1151,20 @@ sub expandmacros {
 
   # Globals, and not-so-globals
   if ($section =~ /g/) {
+
+    # special %define's.  Handle the general case where we eval anything.
+    # Prime example:
+    #%define perl_vendorlib %(eval "`perl -V:installvendorlib`"; echo $installvendorlib)
+    if ($macrostring =~ /^\%\(eval.+\)$/) {
+      $macrostring =~ s/^\%\(//;
+      $macrostring =~ s/\)$//;
+      # Oy vey this gets silly for the perl bits.  Executing a shell to
+      # call Perl to get the vendorlib/sitelib/whatever "core" globals.
+      # This can do more, but...  eww.
+      # Next line is non-optimal - what if $macrostring contains ' characters?
+      $macrostring = qx { /bin/sh -c '$macrostring' };
+    }
+
     $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
