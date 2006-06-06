@@ -397,7 +397,7 @@ LINE: while (<SPECFILE>) {
 	  redo LINE if /^\%/;
 	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides):\s+(.+)$/i)) {
 	    $dname =~ tr/[A-Z]/[a-z]/;
-	    $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'g');
+	    $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'gp');
 	  }
 	}
       }
@@ -606,7 +606,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
 	$buildreq .= ", $1";
       } elsif (/^requires:\s+(.+)/i) {
-	$pkgdata{main}{requires} .= ", ".expandmacros("$1", 'g');
+	$pkgdata{main}{requires} .= ", ".expandmacros("$1", 'gp');
       } elsif (/^provides:\s+(.+)/i) {
 	$pkgdata{main}{provides} .= ", $1";
       } elsif (/^conflicts:\s+(.+)/i) {
