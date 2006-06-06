@@ -180,6 +180,26 @@ if ($cmdopts{type} eq 'b') {
     if !checkbuildreq();
 }
 
+if ($cmdopts{type} eq 't') {
+  # Need to unpack the tarball to find the spec file.  Sort of the inverse of -b above.
+  # zcat $tarball |tar -t |grep .spec
+  # collect some info about the tarball
+  $specfile = "$topdir/BUILD/". qx { zcat $tarball |tar -t |grep .spec\$ };
+  chomp $specfile;
+  my ($fileonly, $dirname) = ($tarball =~ /(([a-zA-Z0-9._-]+)\.tar\.(?:gz|bz2))$/);
+
+  $tarball = abs_path($tarball);
+  my $unpackcmd = "cd $topdir/BUILD; tar -".
+	( $tarball =~ /\.tar\.gz$/ ? "z" : "" ).
+	( $tarball =~ /\.tar\.bz2$/ ? "j" : "" ). "xf $tarball";
+  system "$unpackcmd";
+  system "cp $tarball $topdir/SOURCES/$fileonly";
+  system "cp $specfile $topdir/SPECS/";
+  parse_spec();
+  die "Can't build $pkgdata{main}{name}:  build requirements not met.\n"
+    if !checkbuildreq();
+}
+
 # -> srcpkg if -.s
 if ($cmdopts{stage} eq 's') {
   srcpackage();
@@ -303,10 +323,11 @@ sub parse_cmd {
 	  }
           $srcpkg = $_;
 	} elsif ($cmdopts{type} eq 'b') {
-	  $specfile = $_;
 	  # Spec file
+	  $specfile = $_;
 	} else {
-	  # Tarball
+	  # Tarball build.  Need to extract tarball to find spec file.  Whee.
+	  $tarball = $_;
 	}
       }
     }
@@ -361,7 +382,7 @@ sub parse_cmd {
 ## parse_spec()
 # Parse the .spec file.
 sub parse_spec {
-  open SPECFILE,"<$specfile";
+  open SPECFILE,"<$specfile" or die "specfile ($specfile) barfed: $!";
 
 LINE: while (<SPECFILE>) {
     next if /^#/;	# Ignore comments...
@@ -748,6 +769,7 @@ sub binpackage {
 
     # magic needed to properly version dependencies...
     # only provided deps will really be included
+    $pkgdata{$pkg}{requires} =~ s/^, //;	# Still have to do this here.
     $pkgdata{$pkg}{requires} =~ s/\s+//g;
     my @deps = split /,/, $pkgdata{$pkg}{requires};
     my $tmp = '';
