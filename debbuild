@@ -454,8 +454,10 @@ PREPSCRIPT: while (<SPECFILE>) {
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
 		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
-	  } elsif (/^\%patch([^:]+)\s+(.+)$/) {
-	    $prepscript .= "patch $2 <$topdir/SOURCES/".$pkgdata{main}{"patch$1"}."\n";
+	  } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^:]+)(\s+.+)?$/) ) {
+            $prepscript .= "patch ";
+            $prepscript .= $patchopts if $patchopts;
+	    $prepscript .= " <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
 	  } else {
 	    last PREPSCRIPT if /^\%/;
 	    $prepscript .= $_;
@@ -624,6 +626,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  my @patchbits = split '/', $pkgdata{main}{$patchname};
 	  $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
 	}
+	chomp $pkgdata{main}{$patchname};
       } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
 	$buildreq .= ", $1";
       } elsif (/^requires:\s+(.+)/i) {
