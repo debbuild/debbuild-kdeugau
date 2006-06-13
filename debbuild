@@ -454,7 +454,8 @@ PREPSCRIPT: while (<SPECFILE>) {
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
 		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
-	  } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^:]+)(\s+.+)?$/) ) {
+	  } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^\s]+)(\s+.+)?$/) ) {
+	    chomp $patchnum;
             $prepscript .= "patch ";
             $prepscript .= $patchopts if $patchopts;
 	    $prepscript .= " <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
