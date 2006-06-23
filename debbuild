@@ -460,9 +460,14 @@ PREPSCRIPT: while (<SPECFILE>) {
 		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
 	  } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^\s]+)(\s+.+)?$/) ) {
 	    chomp $patchnum;
-            $prepscript .= "patch ";
+	    $prepscript .= qq(echo "Patch #$patchnum ($pkgdata{main}{"patch$patchnum"}):"\n).
+		"patch ";
+	# If there are options passed, use'em.
+	# Otherwise, catch a bare %patch and ASS-U-ME it's '-p0'-able.
+	# Will break on options that don't provide -pnn, but what the hell.
             $prepscript .= $patchopts if $patchopts;
-	    $prepscript .= " <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
+	    $prepscript .= "-p0" if !$patchopts;
+	    $prepscript .= " -s <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
 	  } else {
 	    last PREPSCRIPT if /^\%/;
 	    $prepscript .= $_;
