@@ -150,6 +150,18 @@ if ($cmdopts{install}) {
   exit 0;
 }
 
+if ($cmdopts{type} eq 'd') {
+  parse_spec();
+  foreach my $pkg (@pkglist) {
+    $pkgdata{$pkg}{name} =~ tr/_/-/;
+
+    my $pkgfullname = "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb";
+
+    print "$pkgfullname\n";
+  }
+  exit 0;
+}
+
 # Stick --rebuild handling in here - basically install_sdeb()
 # followed by tweaking options to run with -ba
 if ($cmdopts{type} eq 's') {
@@ -281,6 +293,8 @@ sub parse_cmd {
 	  $cmdopts{short} = 'y';
 	} elsif (/^--rebuild/) {
 	  $cmdopts{type} = 's';
+	} elsif (/^--showpkgs/) {
+	  $cmdopts{type} = 'd';	# d for 'diagnostic' or 'debug' or 'dump'
 	} else {
 	  print "Long opt $_\n";
 	}
@@ -322,7 +336,7 @@ sub parse_cmd {
 	    die "Can't --rebuild with $_\n";
 	  }
           $srcpkg = $_;
-	} elsif ($cmdopts{type} eq 'b') {
+	} elsif ($cmdopts{type} eq 'b' || $cmdopts{type} eq 'd') {
 	  # Spec file
 	  $specfile = $_;
 	} else {
