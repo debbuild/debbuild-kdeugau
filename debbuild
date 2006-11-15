@@ -124,11 +124,6 @@ my $buildscript = '';
 # NB - rpm doesn't do this;  is it really necessary?
 my $installscript = '[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT'."\n";
 my $cleanscript = '';
-# pre/post (un)install scripts.  Note that these will likely barf as-is.  :/
-my $preinstscript = '';
-my $postinstscript = '';
-my $preuninstscript = '';
-my $postuninstscript = '';
 
 die "Not enough arguments\n" if #$argv == 0;
 
@@ -525,29 +520,17 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	$cleanscript = expandmacros($cleanscript,'gp');
       }
 
-    # pre/post (un)install scripts
-      if (/^\%pre\b/) {
-	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
-	  $preinstscript .= $_;
+    # pre/post (un)install scripts.  Note that we expand macros later anyway, so we'll leave them unexpanded here.
+      if (/^\%(pre|post|preun|postun)\b(?:\s+(?:-n\s+)?(.+))?/i) {
+	my $scriptlet = lc $1;
+	my $pkgname = 'main';
+	if ($2) {	# Magic to add entries to the right list of files
+	  my $tmp = expandmacros("$2", 'g');
+	  if (/-n/) { $pkgname = $tmp; } else { $pkgname = "$pkgdata{main}{name}-$tmp"; }
 	}
-      }
-      if (/^\%post\b/) {
 	while (<SPECFILE>) {
 	  redo LINE if /^\%/;
-	  $postinstscript .= $_;
-	}
-      }
-      if (/^\%preun\b/) {
-	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
-	  $preuninstscript .= $_;
-	}
-      }
-      if (/^\%postun\b/) {
-	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
-	  $postuninstscript .= $_;
+	  $pkgdata{$pkgname}{$scriptlet} .= $_;
 	}
       }
     # done %pre/%post scripts
@@ -889,41 +872,38 @@ sub binpackage {
       close CONFLIST;
     }
 
-    # Can't see much point in scripts on subpackages... although since
-    # it's *possible* I should support it at some point.
-    if ($pkg eq 'main') {
-      if ($preinstscript ne '') {
-	$preinstscript = expandmacros($preinstscript,'g');
-	open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
-	print PREINST "#!/bin/sh\nset -e\n\n";
-	print PREINST $preinstscript;
-	close PREINST;
-	`chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
-      }
-      if ($postinstscript ne '') {
-	$postinstscript = expandmacros($postinstscript,'g');
-	open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
-	print POSTINST "#!/bin/sh\nset -e\n\n";
-	print POSTINST $postinstscript;
-	close POSTINST;
-	`chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
-      }
-      if ($preuninstscript ne '') {
-	$preuninstscript = expandmacros($preuninstscript,'g');
-	open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
-	print PREUNINST "#!/bin/sh\nset -e\n\n";
-	print PREUNINST $preuninstscript;
-	close PREUNINST;
-	`chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
-      }
-      if ($postuninstscript ne '') {
-	$postuninstscript = expandmacros($postuninstscript,'g');
-	open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
-	print POSTUNINST "#!/bin/sh\nset -e\n\n";
-	print POSTUNINST $postuninstscript;
-	close POSTUNINST;
-	`chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
-      }
+    # found the point of scripts on subpackages.
+    if ($pkgdata{$pkg}{'pre'}) {
+      $pkgdata{$pkg}{'pre'} = expandmacros($pkgdata{$pkg}{'pre'},'gp');
+      open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
+      print PREINST "#!/bin/sh\nset -e\n\n";
+      print PREINST $pkgdata{$pkg}{'pre'};
+      close PREINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
+    }
+    if ($pkgdata{$pkg}{'post'}) {
+      $pkgdata{$pkg}{'post'} = expandmacros($pkgdata{$pkg}{'post'},'gp');
+      open PREINST, ">$buildroot/$pkg/DEBIAN/postinst";
+      print PREINST "#!/bin/sh\nset -e\n\n";
+      print PREINST $pkgdata{$pkg}{'post'};
+      close PREINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
+    }
+    if ($pkgdata{$pkg}{'preun'}) {
+      $pkgdata{$pkg}{'pre'} = expandmacros($pkgdata{$pkg}{'preun'},'gp');
+      open PREINST, ">$buildroot/$pkg/DEBIAN/prerm";
+      print PREINST "#!/bin/sh\nset -e\n\n";
+      print PREINST $pkgdata{$pkg}{'preun'};
+      close PREINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
+    }
+    if ($pkgdata{$pkg}{'postun'}) {
+      $pkgdata{$pkg}{'postun'} = expandmacros($pkgdata{$pkg}{'postun'},'gp');
+      open PREINST, ">$buildroot/$pkg/DEBIAN/postrm";
+      print PREINST "#!/bin/sh\nset -e\n\n";
+      print PREINST $pkgdata{$pkg}{'postun'};
+      close PREINST;
+      `chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
     }
 
     # execute
