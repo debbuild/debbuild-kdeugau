@@ -783,6 +783,12 @@ sub binpackage {
 
   foreach my $pkg (@pkglist) {
 
+    # Skip building a package if it doesn't actually have any files.  NB:  This
+    # differs slightly from rpm's behaviour where a package *will* be built -
+    # even without any files - if %files is specified anywhere.  I can think
+    # of odd corner cases where that *may* be desireable.
+    next if $filelist{$pkg} =~ /^\s*$/;
+
     # Gotta do this first, otherwise we don't have a place to move files from %files
     mkdir "$buildroot/$pkg";
 
