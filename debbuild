@@ -573,6 +573,15 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  # Debian dpkg doesn't speak "%docdir".  Meh.
 	  next if /^\%docdir/;
 
+	  # %doc needs extra processing, because it can be a space-separated list.
+	  if (/^\%doc/) {
+	    s/^\%doc\s+//;
+	    foreach (split()) {
+	      $filelist{$pkgname} .= " %{_docdir}/$_";
+	    }
+	    next;
+	  }
+
 	  # Conffiles.  Note that Debian and RH have similar, but not
 	  # *quite* identical ideas of what constitutes a conffile.  Nrgh.
 	  if (/^\%config\s+(.+)$/) {
