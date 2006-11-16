@@ -152,7 +152,7 @@ if ($cmdopts{type} eq 'd') {
 
     my $pkgfullname = "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb";
 
-    print "$pkgfullname\n";
+    print "$pkgfullname\n" if $filelist{$pkg};
   }
   exit 0;
 }
@@ -550,11 +550,32 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  next if /^#/;
 	  # need to update this to deal (properly) with %dir, %attr, etc
 	  next if /^\%dir/;
-	  next if /^\%attr/;
 	  next if /^\%defattr/;
 
 	  # Debian dpkg doesn't speak "%docdir".  Meh.
 	  next if /^\%docdir/;
+
+##fixme
+# Note that big chunks of this section don't match rpm's behaviour;  among other things,
+# rpm accepts more than one %-directive on one line for a file or set of files.
+	  # make sure files get suitable permissions and so on
+	  if (/^\%attr/) {
+	    # We're going to collapse whitespace before processing.  PTHBT.
+	    # While this breaks pathnames with spaces, anyone expecting command-line
+	    # tools with spaces to work (never mind work *properly* or *well*) under
+	    # any *nix has their head so far up their ass they can see out their mouth.
+	    my ($args,$filelist) = split /\)/;
+	    $filelist{$pkgname} .= " $filelist";
+	    $args =~ s/\s+//g;
+	    $args =~ s/"//g;	# don't think quotes are ever necessary, but they're *allowed*
+	    my ($perms,$owner,$group) = ($args =~ /\((\d+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
+# due to Debian's total lack of real permissions-processing in its actual package
+# handling component (dpkg-deb), this can't really be done "properly".  We'll have
+# to add chown/chmod commands to the postinst instead.  Feh.
+	    $pkgdata{$pkgname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
+	    $pkgdata{$pkgname}{'post'} .= "chown $owner $filelist\n" if $owner ne '-';
+	    $pkgdata{$pkgname}{'post'} .= "chgrp $group $filelist\n" if $group ne '-';
+	  }
 
 	  # %doc needs extra processing, because it can be a space-separated list.
 	  if (/^\%doc/) {
