@@ -154,6 +154,9 @@ if ($cmdopts{type} eq 'd') {
     my $pkgfullname = "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb";
 
     print "$pkgfullname\n" if $filelist{$pkg};
+
+    # Source package
+    print "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}.sdeb\n";
   }
   exit 0;
 }
