@@ -576,9 +576,9 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 # due to Debian's total lack of real permissions-processing in its actual package
 # handling component (dpkg-deb), this can't really be done "properly".  We'll have
 # to add chown/chmod commands to the postinst instead.  Feh.
-	    $pkgdata{$pkgname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
 	    $pkgdata{$pkgname}{'post'} .= "chown $owner $filelist\n" if $owner ne '-';
 	    $pkgdata{$pkgname}{'post'} .= "chgrp $group $filelist\n" if $group ne '-';
+	    $pkgdata{$pkgname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
 	  }
 
 	  # %doc needs extra processing, because it can be a space-separated list.
