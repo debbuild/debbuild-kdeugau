@@ -51,6 +51,7 @@ sub expandmacros;
 # default is /usr/src/debian/{BUILD,SOURCES,SPECS,DEBS,SDEBS}
 
 # Globals
+my $finalmessages = '';	# A place to stuff messages that I want printed at the *very* end of any processing.
 my $specfile;
 my $tarball;
 my $srcpkg;
@@ -240,6 +241,9 @@ if ($cmdopts{stage} eq 'a') {
 if ($cmdopts{stage} eq 'b') {
   binpackage();
 }
+
+# Spit out any closing remarks
+print $finalmessages;
 
 # Just in case.
 exit 0;
@@ -932,6 +936,9 @@ sub binpackage {
     system("/bin/sh -e $debscriptfile") == 0
 	or die "Can't exec: $!\n";
 
+    $finalmessages .= "Wrote binary package ".
+	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb".
+	" in $topdir/DEBS/i386\n";
     # and clean up
     unlink $debscriptfile;
 
@@ -988,7 +995,7 @@ sub srcpackage {
   $paxcmd = expandmacros($paxcmd,'gp');
   
   system "$paxcmd";
-  print "Wrote source package $pkgsrcname in $topdir/SDEBS.\n";
+  $finalmessages .= "Wrote source package $pkgsrcname in $topdir/SDEBS.\n";
 }
 
 
