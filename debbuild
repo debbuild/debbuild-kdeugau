@@ -146,6 +146,7 @@ if ($cmdopts{install}) {
   exit 0;
 }
 
+# output stage of --showpkgs
 if ($cmdopts{type} eq 'd') {
   parse_spec();
   foreach my $pkg (@pkglist) {
