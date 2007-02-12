@@ -583,6 +583,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	    $pkgdata{$pkgname}{'post'} .= "chown $owner $filelist\n" if $owner ne '-';
 	    $pkgdata{$pkgname}{'post'} .= "chgrp $group $filelist\n" if $group ne '-';
 	    $pkgdata{$pkgname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
+	    next;
 	  }
 
 	  # %doc needs extra processing, because it can be a space-separated list.
