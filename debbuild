@@ -576,7 +576,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	    $filelist{$pkgname} .= " $filelist";
 	    $args =~ s/\s+//g;
 	    $args =~ s/"//g;	# don't think quotes are ever necessary, but they're *allowed*
-	    my ($perms,$owner,$group) = ($args =~ /\((\d+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
+	    my ($perms,$owner,$group) = ($args =~ /\(([\d-]+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
 # due to Debian's total lack of real permissions-processing in its actual package
 # handling component (dpkg-deb), this can't really be done "properly".  We'll have
 # to add chown/chmod commands to the postinst instead.  Feh.
