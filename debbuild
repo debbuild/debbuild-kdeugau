@@ -628,7 +628,6 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  # ... and "normal" files
 	  $filelist{$pkgname} .= " $_";
 	}
-	$filelist{$pkgname} = expandmacros($filelist{$pkgname}, 'gp');
       } # done %file section
 
       if (/^\%changelog/) {
@@ -1228,7 +1227,7 @@ sub expandmacros {
     $macrostring =~ s|%{_mandir}|%{_datadir}/man|g;			#/usr/share/man
     $macrostring =~ s|%{_infodir}|%{_datadir}/info|g;			#/usr/share/info
     $macrostring =~ s|%{_oldincludedir}|/usr/include|g;		#/usr/include
-    $macrostring =~ s|%{_includedir}|%{_prefix\}/include|g;	#/usr/include
+    $macrostring =~ s|%{_includedir}|%{_prefix}/include|g;	#/usr/include
     $macrostring =~ s|%{_libdir}|%{_exec_prefix}/%{_lib}|g;	#/usr/lib
     $macrostring =~ s|%{_lib}|lib|g;					#?
     $macrostring =~ s|%{_localstatedir}|/var|g;			#/var
@@ -1272,16 +1271,19 @@ sub expandmacros {
     $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
-    $macrostring =~ s'%{_docdir}'/usr/share/doc'g;
+    $macrostring =~ s'%{_docdir}'%{_datadir}/doc'g;
 
     # Standard FHS locations.  More or less.
     $macrostring =~ s'%{_bindir}'/usr/bin'g;
     $macrostring =~ s'%{_sbindir}'/usr/sbin'g;
-    $macrostring =~ s'%{_mandir}'/usr/share/man'g;
+    $macrostring =~ s'%{_mandir}'%{_datadir}/man'g;
     $macrostring =~ s'%{_includedir}'/usr/include'g;
     $macrostring =~ s'%{_libdir}'/usr/lib'g;
     $macrostring =~ s'%{_sysconfdir}'/etc'g;
     $macrostring =~ s'%{_localstatedir}'/var'g;
+
+    # FHS-ish locations that aren't quite actually FHS-specified.
+    $macrostring =~ s'%{_datadir}'/usr/share'g;
 
     # %define's
     foreach my $key (keys %specglobals) {
