@@ -158,7 +158,7 @@ if ($cmdopts{type} eq 'd') {
 
   }
   # Source package
-  print "$pkgdata{main}{name}_$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb\n";
+  print "$pkgdata{main}{name}-$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb\n";
   exit 0;
 }
 
