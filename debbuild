@@ -104,7 +104,7 @@ q(#!/bin/sh
 foreach (`dpkg-architecture`) {
   s/=(.+)/="$1"/;
   $scriptletbase .= "  $_";
-  ($hostarch) = (/^DEB_HOST_ARCH="(.+)"$/) if /DEB_HOST_ARCH/;
+  ($hostarch) = (/^DEB_HOST_ARCH="(.+)"$/) if /DEB_HOST_ARCH=/;
 }
 $scriptletbase .=
 q(
