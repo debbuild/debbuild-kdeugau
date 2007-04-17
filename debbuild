@@ -409,6 +409,7 @@ sub parse_spec {
   open SPECFILE,"<$specfile" or die "specfile ($specfile) barfed: $!";
 
   my $buildarch = $hostarch;
+  $pkgdata{main}{arch} = $hostarch;
 
 LINE: while (<SPECFILE>) {
     next if /^#/;	# Ignore comments...
