@@ -450,6 +450,7 @@ LINE: while (<SPECFILE>) {
 	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
 	    $dname =~ tr/[A-Z]/[a-z]/;
 	    if ($dname =~ /^BuildArch/i) {
+	      $dvalue =~ s/^noarch/all/ig;
 	      $buildarch = $dvalue;	# Emulate rpm's behaviour to a degree
 	      $dname = 'arch';
 	    }
@@ -692,6 +693,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	chomp $pkgdata{main}{$patchname};
       } elsif (/^buildarch(?:itecture)?:\s+(.+)/i) {
 	$pkgdata{main}{arch} = $1;
+	$pkgdata{main}{arch} =~ s/^noarch$/all/;
 	$buildarch = $pkgdata{main}{arch};
       } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
 	$buildreq .= ", $1";
@@ -813,7 +815,6 @@ sub binpackage {
   foreach my $pkg (@pkglist) {
 
     $pkgdata{$pkg}{arch} = $hostarch if !$pkgdata{$pkg}{arch};  # Just In Case.
-    $pkgdata{$pkg}{arch} =~ s/^noarch/all/ig;
 
     # Make sure we have somewhere to write the .deb file
     if (!-e "$topdir/DEBS/$pkgdata{$pkg}{arch}") {
