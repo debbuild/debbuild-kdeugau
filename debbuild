@@ -77,13 +77,19 @@ my %targets = ('p' => 'Prep',
 		'b' => 'Build binary',
 		's' => 'Build source'
 	);
+# Ah, the joys of multiple architectures.  :(  Feh.
+# As copied from rpm
+my %optflags = ( 'i386'	=>	'-O2 -g -march=i386 -mcpu=i686',
+		'amd64'	=>	'-O2 -g'
+	);
+my $hostarch;	# we set this later...
 my $scriptletbase =
 q(#!/bin/sh
 
   RPM_SOURCE_DIR="%{_topdir}/SOURCES"
   RPM_BUILD_DIR="%{_topdir}/BUILD"
-  RPM_OPT_FLAGS="-O2 -g -march=i386 -mcpu=i686"
-  RPM_ARCH="i386"
+  RPM_OPT_FLAGS="%{optflags}"
+  RPM_ARCH="%{_arch}"
   RPM_OS="linux"
   export RPM_SOURCE_DIR RPM_BUILD_DIR RPM_OPT_FLAGS RPM_ARCH RPM_OS
   RPM_DOC_DIR="/usr/share/doc"
@@ -98,6 +104,7 @@ q(#!/bin/sh
 foreach (`dpkg-architecture`) {
   s/=(.+)/="$1"/;
   $scriptletbase .= "  $_";
+  ($hostarch) = (/^DEB_HOST_ARCH="(.+)"$/) if /DEB_HOST_ARCH/;
 }
 $scriptletbase .=
 q(
@@ -152,7 +159,7 @@ if ($cmdopts{type} eq 'd') {
   foreach my $pkg (@pkglist) {
     $pkgdata{$pkg}{name} =~ tr/_/-/;
 
-    my $pkgfullname = "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb";
+    my $pkgfullname = "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb";
 
     print "$pkgfullname\n" if $filelist{$pkg};
 
@@ -401,6 +408,8 @@ sub parse_cmd {
 sub parse_spec {
   open SPECFILE,"<$specfile" or die "specfile ($specfile) barfed: $!";
 
+  my $buildarch = $hostarch;
+
 LINE: while (<SPECFILE>) {
     next if /^#/;	# Ignore comments...
     next if /^\s+$/;	# ... and blank lines.
@@ -431,10 +440,18 @@ LINE: while (<SPECFILE>) {
 	push @pkglist, $subname;
 	$pkgdata{$subname}{name} = $subname;
 	$pkgdata{$subname}{version} = $pkgdata{main}{version};
+  # Build "same arch as previous package found" by default.  Where rpm just picks the
+  # *very* last one, we want to allow arch<native>+arch-all
+  # (eg, Apache is i386, but apache-manual is all)
+	$pkgdata{$subname}{arch} = $buildarch;	# Since it's likely subpackages will NOT have a BuildArch line...
 	while (<SPECFILE>) {
 	  redo LINE if /^\%/;
-	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides):\s+(.+)$/i)) {
+	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
 	    $dname =~ tr/[A-Z]/[a-z]/;
+	    if ($dname =~ /^BuildArch/i) {
+	      $buildarch = $dvalue;	# Emulate rpm's behaviour to a degree
+	      $dname = 'arch';
+	    }
 	    $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'gp');
 	  }
 	}
@@ -672,6 +689,9 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
 	}
 	chomp $pkgdata{main}{$patchname};
+      } elsif (/^buildarch(?:itecture)?:\s+(.+)/i) {
+	$pkgdata{main}{arch} = $1;
+	$buildarch = $pkgdata{main}{arch};
       } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
 	$buildreq .= ", $1";
       } elsif (/^requires:\s+(.+)/i) {
@@ -788,12 +808,16 @@ sub install {
 # Creates miscellaneous files required by dpkg-deb to actually build the package file.
 # Should handle simple subpackages
 sub binpackage {
-  # Make sure we have somewhere to write the .deb file
-  if (!-e "$topdir/DEBS/i386") {
-    mkdir "$topdir/DEBS/i386";
-  }
 
   foreach my $pkg (@pkglist) {
+
+    $pkgdata{$pkg}{arch} = $hostarch if !$pkgdata{$pkg}{arch};  # Just In Case.
+    $pkgdata{$pkg}{arch} =~ s/^noarch/all/ig;
+
+    # Make sure we have somewhere to write the .deb file
+    if (!-e "$topdir/DEBS/$pkgdata{$pkg}{arch}") {
+      mkdir "$topdir/DEBS/$pkgdata{$pkg}{arch}";
+    }
 
     # Skip building a package if it doesn't actually have any files.  NB:  This
     # differs slightly from rpm's behaviour where a package *will* be built -
@@ -870,8 +894,8 @@ sub binpackage {
     sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
     print DEBSCRIPT $scriptletbase;
-    print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot/$pkg $topdir/DEBS/i386/".
-	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb\n";
+    print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
+	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb\n";
       # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
     close DEBSCRIPT;
 
@@ -879,7 +903,7 @@ sub binpackage {
 	"Version: $pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
 	"Section: $pkgdata{$pkg}{group}\n".
 	"Priority: optional\n".
-	"Architecture: i386\n".
+	"Architecture: $pkgdata{$pkg}{arch}\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
 	( $pkgdata{$pkg}{requires} ne '' ? "Depends: $pkgdata{$pkg}{requires}\n" : '' ).
 	( defined($pkgdata{$pkg}{provides}) ? "Provides: $pkgdata{$pkg}{provides}\n" : '' ).
@@ -941,8 +965,8 @@ sub binpackage {
 	or die "Can't exec: $!\n";
 
     $finalmessages .= "Wrote binary package ".
-	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_i386.deb".
-	" in $topdir/DEBS/i386\n";
+	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb".
+	" in $topdir/DEBS/$pkgdata{$pkg}{arch}\n";
     # and clean up
     unlink $debscriptfile;
 
@@ -1295,6 +1319,11 @@ sub expandmacros {
     if ($macrostring =~ /\%\{\_\_([a-z0-9_-]+)\}/) {
       $macrostring =~ s|%{__([a-z0-9_-]+)}|$1|g;
     }
+
+    # Misc expansions
+    $macrostring =~ s|%{_arch}|$hostarch|g;
+    $macrostring =~ s|%{optflags}|$optflags{$hostarch}|g;
+
   } # done with globals section
 
   return $macrostring;
