@@ -1170,6 +1170,8 @@ sub getreqs() {
 ## install_sdeb()
 # Extracts .sdeb contents to %_topdir as appropriate
 sub install_sdeb {
+  $srcpkg = abs_path($srcpkg);
+
   my $paxcmd = "cd $topdir; pax -r <$srcpkg; cd -";
 
   # In case of %-macros...
