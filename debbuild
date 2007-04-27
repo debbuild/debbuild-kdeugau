@@ -56,7 +56,7 @@ my $specfile;
 my $tarball;
 my $srcpkg;
 my $cmdbuildroot;
-my $tarballdir; = '%{name}-%{version}';	# We do this in case of a spec file not using %setup...
+my $tarballdir = '%{name}-%{version}';	# We do this in case of a spec file not using %setup...
 my %specglobals;	# For %define's in specfile, among other things.
 
 # Initialized globals
@@ -417,6 +417,7 @@ sub parse_cmd {
 sub parse_spec {
   open SPECFILE,"<$specfile" or die "specfile ($specfile) barfed: $!";
 
+  my $iflevel = 0;
   my $buildarch = $hostarch;
   $pkgdata{main}{arch} = $hostarch;
 
@@ -429,6 +430,33 @@ LINE: while (<SPECFILE>) {
 
       if (my ($key, $def) = (/^\%define\s+([^\s]+)\s+(.+)$/) ) {
         $specglobals{$key} = expandmacros($def,'g');
+      }
+
+      if (/^\%if/) {
+	s/^\%if//;
+	my $expr = expandmacros($_, 'g');
+	$iflevel++;
+	next LINE if $expr != 0;        # This appears to be the only case we call false.
+	while (<SPECFILE>) {
+	  if (/^\%endif/) {
+	    $iflevel--;
+	    next LINE;
+	  } elsif (/^\%else/) {
+	    next LINE;
+	  }
+	}
+      }
+      if (/^\%else/) {
+       while (<SPECFILE>) {
+         if (/^\%endif/) {
+           $iflevel--;
+           next LINE;
+         }
+       }
+      }
+      if (/^\%endif/) {
+	$iflevel--;
+	next LINE;
       }
 
       if (/^\%description(?:\s+(?:-n\s+)?(.+))?/) {
@@ -1323,6 +1351,20 @@ sub expandmacros {
     # %define's
     foreach my $key (keys %specglobals) {
       $macrostring =~ s|%{$key}|$specglobals{$key}|g;
+    }
+
+    # support for **some** %if constructs.  Note that this breaks somewhat if
+    # there's no value specified...  but so does rpm.
+    while ($macrostring =~ /\%\{\?(\!)?([a-z0-9_.-]+)(?:\:([a-z0-9_.-]+))?\}/) {       #Whew....
+      my $neg = $1;
+      my $macro = $2;
+      my $value = $3;
+      if ($specglobals{$macro}) {
+	$value = '' if $neg;
+      } else {
+	$value = '' if !$neg;
+      }
+      $macrostring =~ s/\%\{\?\!?[a-z0-9_.-]+(?:\:[a-z0-9_.-]+)?\}/$value/;
     }
 
     # system programs.  RPM uses a global config file for these;  we'll just
