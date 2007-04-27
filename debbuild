@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 # debbuild script
 # Shamelessly steals interface from rpm's "rpmbuild" to create
 # Debian packages.  Please note that such packages are highly
@@ -56,7 +56,7 @@ my $specfile;
 my $tarball;
 my $srcpkg;
 my $cmdbuildroot;
-my $tarballdir;	# This should really be initialized, but the coding makes it, um, ugly.
+my $tarballdir; = '%{name}-%{version}';	# We do this in case of a spec file not using %setup...
 my %specglobals;	# For %define's in specfile, among other things.
 
 # Initialized globals
@@ -306,7 +306,7 @@ sub parse_cmd {
 	} elsif (/^--showpkgs/) {
 	  $cmdopts{type} = 'd';	# d for 'diagnostic' or 'debug' or 'dump'
 	} else {
-	  print "Long opt $_\n";
+	  print "Long option $_ not handled\n";
 	}
       } else {
 	# Not a long option
@@ -413,7 +413,7 @@ sub parse_spec {
 
 LINE: while (<SPECFILE>) {
     next if /^#/;	# Ignore comments...
-    next if /^\s+$/;	# ... and blank lines.
+    next if /^\s*$/;	# ... and blank lines.
 
     if (/^\%/) {
       # A macro that needs further processing.
@@ -476,8 +476,6 @@ PREPSCRIPT: while (<SPECFILE>) {
 	    $prepscript .= "cd $topdir/BUILD\n";
 	    if ( /\s+-n\s+([^\s]+)\s+/ ) {
 	      $tarballdir = $1;
-	    } else {
-	      $tarballdir = "$pkgdata{main}{name}-$pkgdata{main}{version}";
 	    }
 	    $tarballdir = expandmacros($tarballdir,'gp');
 	    $prepscript .= "rm -rf $tarballdir\n";
@@ -656,6 +654,8 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  $pkgdata{main}{changelog} .= $_;
 	}
       }
+# don't add any segments after this (%changelog), because something in the (Perl) parser gets
+# thoroughly confuzzled if it tries to manipulate file data after EOL.  Feh.
 
     } else {	# Data from the spec file "header"
 
@@ -736,8 +736,6 @@ sub prep {
   # Replace some things here just to make sure.
   $prepscript = expandmacros($prepscript,'gp');
 
-#print $prepscript; exit 0;
-
   # create script filename
   my $prepscriptfile = "$tmpdir/deb-tmp.prep.".int(rand(99998)+1);
   sysopen(PREPSCRIPT, $prepscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
@@ -791,7 +789,6 @@ sub install {
   sysopen(INSTSCRIPT, $installscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
   print INSTSCRIPT $scriptletbase;
-#  print INSTSCRIPT $cleanscript;	# Clean up our install target before installing into it.
   print INSTSCRIPT $installscript;
   close INSTSCRIPT;
 
@@ -1284,9 +1281,10 @@ sub expandmacros {
   if ($section =~ /g/) {
 
     # special %define's.  Handle the general case where we eval anything.
+    # Even more general:  %(...) is a spec-parse-time shell code wrapper.
     # Prime example:
     #%define perl_vendorlib %(eval "`perl -V:installvendorlib`"; echo $installvendorlib)
-    if ($macrostring =~ /^\%\(eval.+\)$/) {
+    if ($macrostring =~ /^\%\(.+\)$/) {
       $macrostring =~ s/^\%\(//;
       $macrostring =~ s/\)$//;
       # Oy vey this gets silly for the perl bits.  Executing a shell to
