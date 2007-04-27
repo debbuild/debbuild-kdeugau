@@ -305,6 +305,8 @@ sub parse_cmd {
 	  $cmdopts{type} = 's';
 	} elsif (/^--showpkgs/) {
 	  $cmdopts{type} = 'd';	# d for 'diagnostic' or 'debug' or 'dump'
+	} elsif (/^--define/) {
+	  # nothing to do?  Can't see anything needed, we handle the actual definition later.
 	} else {
 	  print "Long option $_ not handled\n";
 	}
@@ -337,6 +339,13 @@ sub parse_cmd {
       # on which one we meet.
       if ($prevopt eq '--buildroot') {
 	$cmdbuildroot = $_;
+      } elsif ($prevopt eq '--define') {
+	my ($macro,$value) = (/([a-z0-9_.-]+)(?:\s+(.+))?/);
+	if ($value) {
+	  $specglobals{$macro} = $value;
+	} else {
+	  warn "WARNING:  missing value for macro $macro in --define!  Ignoring.\n";
+	}
       } elsif ($prevopt eq '-i') {
 	$srcpkg = $_;
       } else {
