@@ -265,7 +265,7 @@ exit 0;
 # Currently only handles .debmacros
 # Needs to handle "other files"
 sub load_userconfig {
-  my (undef,undef,undef,undef,undef,undef,undef,$homedir,undef) = getpwuid($<);
+  my $homedir = (getpwuid($<))[7];
   if (-e "$homedir/.debmacros") {
     open USERMACROS,"<$homedir/.debmacros";
     while (<USERMACROS>) {
@@ -273,6 +273,11 @@ sub load_userconfig {
       if (/^\%_topdir/) {
 	my (undef,$tmp) = split /\s+/, $_;
 	$topdir = $tmp;
+      }
+      next if /^\%_/;
+      # Allow arbitrary definitions.  Note that we're only doing simple defs here for now.
+      if (/^\%([a-z0-9]+)\s+(.+)$/) {
+	$specglobals{$1} = $2;
       }
     }
   }
@@ -496,6 +501,7 @@ LINE: while (<SPECFILE>) {
 	}
       }
 
+##fixme:  need to allow %if contructs to work in subsections like %prep
       if (/^\%prep/) {
 	# %prep section.  May have %setup macro;  may include %patch tags,
 	# may be just a bare shell script.
@@ -1317,20 +1323,6 @@ sub expandmacros {
   # Globals, and not-so-globals
   if ($section =~ /g/) {
 
-    # special %define's.  Handle the general case where we eval anything.
-    # Even more general:  %(...) is a spec-parse-time shell code wrapper.
-    # Prime example:
-    #%define perl_vendorlib %(eval "`perl -V:installvendorlib`"; echo $installvendorlib)
-    if ($macrostring =~ /^\%\(.+\)$/) {
-      $macrostring =~ s/^\%\(//;
-      $macrostring =~ s/\)$//;
-      # Oy vey this gets silly for the perl bits.  Executing a shell to
-      # call Perl to get the vendorlib/sitelib/whatever "core" globals.
-      # This can do more, but...  eww.
-      # Next line is non-optimal - what if $macrostring contains ' characters?
-      $macrostring = qx { /bin/sh -c '$macrostring' };
-    }
-
     $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
@@ -1351,6 +1343,19 @@ sub expandmacros {
     # %define's
     foreach my $key (keys %specglobals) {
       $macrostring =~ s|%{$key}|$specglobals{$key}|g;
+    }
+
+    # special %define's.  Handle the general case where we eval anything.
+    # Even more general:  %(...) is a spec-parse-time shell code wrapper.
+    # Prime example:
+    #%define perl_vendorlib %(eval "`perl -V:installvendorlib`"; echo $installvendorlib)
+    if ($macrostring =~ /\%\((.+)\)/) {
+      my $shellstr = $1;
+      # Oy vey this gets silly for the perl bits.  Executing a shell to
+      # call Perl to get the vendorlib/sitelib/whatever "core" globals.
+      # This can do more, but...  eww.
+      $shellstr = qx { /bin/sh -c '$shellstr' };	# Yay!  ' characters apparently get properly exscapededed.
+      $macrostring =~ s/\%\(.+\)/$shellstr/;
     }
 
     # support for **some** %if constructs.  Note that this breaks somewhat if
