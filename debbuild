@@ -247,10 +247,12 @@ if ($cmdopts{stage} =~ /[ilabs]/) {
 if ($cmdopts{stage} eq 'a') {
   binpackage();
   srcpackage();
+  clean();
 }
 # -> binpkg if -.b
 if ($cmdopts{stage} eq 'b') {
   binpackage();
+  clean();
 }
 
 # Spit out any closing remarks
@@ -1066,7 +1068,31 @@ sub srcpackage {
   
   system "$paxcmd";
   $finalmessages .= "Wrote source package $pkgsrcname in $topdir/SDEBS.\n";
-}
+} # end srcpackage()
+
+
+## clean()
+# Writes and executes the %clean script (mostly) built while reading the spec file.
+sub clean {
+  # Replace some things here just to make sure.
+  $cleanscript = expandmacros($cleanscript,'gp');
+
+  # create script filename
+  my $cleanscriptfile = "$tmpdir/deb-tmp.clean.".int(rand(99998)+1);
+  sysopen(CLEANSCRIPT, $cleanscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
+	or die $!;
+  print CLEANSCRIPT $scriptletbase;
+  print CLEANSCRIPT $cleanscript;
+  close CLEANSCRIPT;
+
+  # execute
+  print "Calling \%clean script $cleanscriptfile...\n";
+  system("/bin/sh -e $cleanscriptfile") == 0
+	or die "Can't exec: $!\n";
+
+  # and clean up
+  unlink $cleanscriptfile;
+} # end clean()
 
 
 ## checkbuildreq()
