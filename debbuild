@@ -59,6 +59,8 @@ my $cmdbuildroot;
 my $tarballdir = '%{name}-%{version}';	# We do this in case of a spec file not using %setup...
 my %specglobals;	# For %define's in specfile, among other things.
 
+$specglobals{'_vendor'} = 'debbuild';
+
 # Initialized globals
 my $verbosity = 0;
 my %cmdopts = (type => '',
@@ -441,8 +443,32 @@ LINE: while (<SPECFILE>) {
 
       if (/^\%if/) {
 	s/^\%if//;
+	chomp;
 	my $expr = expandmacros($_, 'g');
 	$iflevel++;
+
+	if ($expr !~ /^\s*\d+\s*$/) {
+	  # gots a logic statement we want to turn into a 1 or a 0.  most likely by eval'ing it.
+
+	  $expr =~ s/\s+//g;
+	  $expr =~ s/^(\w+)/"$1"/ if $expr !~ /^['"]\w['"]/;
+	  $expr =~ s/(\w+)$/"$1"/ if $expr !~ /['"]\w['"]$/;
+
+	  # Done in this order so we don't cascade incorrectly.  Yes, those spaces ARE correct in the replacements!
+	  $expr =~ s/==/ eq /;
+	  $expr =~ s/!=/ ne /;
+	  $expr =~ s/<=>/ cmp /;
+	  $expr =~ s/<=/ le /;
+	  $expr =~ s/>=/ ge /;
+	  $expr =~ s/</ lt /;
+	  $expr =~ s/>/ gt /;
+
+	  # Turn it into something that eval's to a number.  Maybe not needed?  O_o
+	  #$expr = "( $expr ? 1 : 0 )";
+
+	  $expr = eval $expr;
+	}
+
 	next LINE if $expr != 0;        # This appears to be the only case we call false.
 	while (<SPECFILE>) {
 	  if (/^\%endif/) {
