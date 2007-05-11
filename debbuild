@@ -205,7 +205,7 @@ if ($cmdopts{type} eq 't') {
   # Need to unpack the tarball to find the spec file.  Sort of the inverse of -b above.
   # zcat $tarball |tar -t |grep .spec
   # collect some info about the tarball
-  $specfile = "$topdir/BUILD/". qx { zcat $tarball |tar -t |grep .spec\$ };
+  $specfile = "$topdir/BUILD/". qx { zcat $tarball |tar -t |grep -e '[\.]spec\$' };
   chomp $specfile;
   my ($fileonly, $dirname) = ($tarball =~ /(([a-zA-Z0-9._-]+)\.tar\.(?:gz|bz2))$/);
 
