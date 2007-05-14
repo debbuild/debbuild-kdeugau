@@ -1227,6 +1227,7 @@ sub getreqs() {
     next if /^$pkgtree/;
     next if /not a dynamic executable/;
     next if m|/lib/ld-linux.so|;	# Hack! Hack!  PTHBTT!  (libc suxx0rz)
+    next if /linux-gate.so/;		# Kernel hackery for teh W1n!!1!1eleventy-one!1  (Don't ask.  Feh.)
 
     my ($req) = (/^\s+([a-z0-9._-]+)/); # dig out the actual library (so)name
 
