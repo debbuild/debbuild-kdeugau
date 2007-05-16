@@ -500,7 +500,7 @@ LINE: while (<SPECFILE>) {
 	}
         while (<SPECFILE>) {
 	  next if /^#/;    # Messy.  Should be possible to do better.  :/
-          redo LINE if /^\%/;
+          redo LINE if /^\%[a-z]/;
           $pkgdata{$subname}{desc} .= " $_";
         }
       }
@@ -516,7 +516,7 @@ LINE: while (<SPECFILE>) {
   # (eg, Apache is i386, but apache-manual is all)
 	$pkgdata{$subname}{arch} = $buildarch;	# Since it's likely subpackages will NOT have a BuildArch line...
 	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
+	  redo LINE if /^\%[a-z]/;
 	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
 	    $dname =~ tr/[A-Z]/[a-z]/;
 	    if ($dname =~ /^BuildArch/i) {
@@ -610,7 +610,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       }
       if (/^\%clean/) {
 	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
+	  redo LINE if /^\%[a-z]/;
 	  $cleanscript .= $_;
 	}
 	$cleanscript = expandmacros($cleanscript,'gp');
@@ -625,7 +625,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  if (/-n/) { $pkgname = $tmp; } else { $pkgname = "$pkgdata{main}{name}-$tmp"; }
 	}
 	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
+	  redo LINE if /^\%[a-z]/;
 	  $pkgdata{$pkgname}{$scriptlet} .= $_;
 	}
       }
@@ -711,7 +711,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
 	  $_ = expandmacros $_, 'g';
 
 	  # ... unknown or "next section" % directives ...
-	  redo LINE if /^\%/;
+	  redo LINE if /^\%[a-z]/;
 
 	  # ... and "normal" files
 	  $filelist{$pkgname} .= " $_";
@@ -721,7 +721,7 @@ INSTALLSCRIPT: while (<SPECFILE>) {
       if (/^\%changelog/) {
 	$pkgdata{main}{changelog} = '';
 	while (<SPECFILE>) {
-	  redo LINE if /^\%/;
+	  redo LINE if /^\%[a-z]/;
 	  $pkgdata{main}{changelog} .= $_;
 	}
       }
