@@ -115,6 +115,31 @@ q(
   cd %{_topdir}/BUILD
 );
 
+# Hackery to try to bring some semblance of sanity to packages built for more
+# than one Debian version at the same time.  Whee.
+# /etc/debian-version
+my %distmap = (
+	"3.1.9ubuntu7.1"	=> "dapper",
+	"4ubuntu2"	=> "feisty",
+	"3.0"	=> "woody",
+	"3.1"	=> "sarge",
+	"4"	=> "etch",
+	"4.0"	=> "lenny",
+	"4.0.0"	=> "sid");
+# Enh.  There doesn't seem to be any better way to do this...  :(
+{
+  my $basever = qx { dpkg-query --showformat '\${version}' -W base-files };
+  if ($basever =~ /^\d\.\d\.(\d)$/) {
+    $basever =~ s/\.\d$// if $1 ne '0';
+  }
+# want to do something with this...   erm, what was I going to do?  O_o
+  my $releasever = qx { cat /etc/debian_version };
+  chomp $releasever;
+
+  $specglobals{"debdist"} = $distmap{$basever};
+  $specglobals{"debver"} = $basever;	# this may have trouble with Ubuntu versions?
+}
+
 # Package data
 # This is the form of $pkgdata{pkgname}{meta}
 # meta includes Summary, Name, Version, Release, Group, Copyright,
