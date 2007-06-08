@@ -455,130 +455,198 @@ sub parse_spec {
   my $buildarch = $hostarch;
   $pkgdata{main}{arch} = $hostarch;
 
+  my $stage = 'preamble';
+  my $subname = 'main';
+  my $scriptlet;
+
+# Basic algorithm:
+# For each line
+#   if it's a member of an %if construct, branch and see which segment of the
+#	spec file we need to parse and which one gets discarded, then
+#	short-circuit back to the top of the loop.
+#   if it's a %section, bump the stage.  Preparse addons to the %section line
+#	(eg subpackage) and stuff them in suitable loop-global variables, then
+#	short-circuit back to the top of the loop.
+#   Otherwise, parse the line according to which section we're supposedly
+#	parsing right now
+
 LINE: while (<SPECFILE>) {
-    next if /^#/;	# Ignore comments...
-    next if /^\s*$/;	# ... and blank lines.
+    next if /^#/;       # Ignore comments...
+    next if /^\s*$/;    # ... and blank lines.
 
-    if (/^\%/) {
-      # A macro that needs further processing.
+# preprocess %define's
+    if (my ($key, $def) = (/^\%define\s+([^\s]+)\s+(.+)$/) ) {
+      $specglobals{$key} = expandmacros($def,'g');
+    }
 
-      if (my ($key, $def) = (/^\%define\s+([^\s]+)\s+(.+)$/) ) {
-        $specglobals{$key} = expandmacros($def,'g');
+    if (/^\%if/) {
+      s/^\%if//;
+      chomp;
+      my $expr = expandmacros($_, 'g');
+      $iflevel++;
+
+      if ($expr !~ /^\s*\d+\s*$/) {
+        # gots a logic statement we want to turn into a 1 or a 0.  most likely by eval'ing it.
+
+        $expr =~ s/\s+//g;
+        $expr =~ s/^(\w+)/"$1"/ if $expr !~ /^['"]\w['"]/;
+        $expr =~ s/(\w+)$/"$1"/ if $expr !~ /['"]\w['"]$/;
+
+        # Done in this order so we don't cascade incorrectly.  Yes, those spaces ARE correct in the replacements!
+        $expr =~ s/==/ eq /;
+        $expr =~ s/!=/ ne /;
+        $expr =~ s/<=>/ cmp /;
+        $expr =~ s/<=/ le /;
+        $expr =~ s/>=/ ge /;
+        $expr =~ s/</ lt /;
+        $expr =~ s/>/ gt /;
+
+        # Turn it into something that eval's to a number.  Maybe not needed?  O_o
+        #$expr = "( $expr ? 1 : 0 )";
+
+        $expr = eval $expr;
       }
 
-      if (/^\%if/) {
-	s/^\%if//;
-	chomp;
-	my $expr = expandmacros($_, 'g');
-	$iflevel++;
-
-	if ($expr !~ /^\s*\d+\s*$/) {
-	  # gots a logic statement we want to turn into a 1 or a 0.  most likely by eval'ing it.
-
-	  $expr =~ s/\s+//g;
-	  $expr =~ s/^(\w+)/"$1"/ if $expr !~ /^['"]\w['"]/;
-	  $expr =~ s/(\w+)$/"$1"/ if $expr !~ /['"]\w['"]$/;
-
-	  # Done in this order so we don't cascade incorrectly.  Yes, those spaces ARE correct in the replacements!
-	  $expr =~ s/==/ eq /;
-	  $expr =~ s/!=/ ne /;
-	  $expr =~ s/<=>/ cmp /;
-	  $expr =~ s/<=/ le /;
-	  $expr =~ s/>=/ ge /;
-	  $expr =~ s/</ lt /;
-	  $expr =~ s/>/ gt /;
-
-	  # Turn it into something that eval's to a number.  Maybe not needed?  O_o
-	  #$expr = "( $expr ? 1 : 0 )";
-
-	  $expr = eval $expr;
-	}
-
-	next LINE if $expr != 0;        # This appears to be the only case we call false.
-	while (<SPECFILE>) {
-	  if (/^\%endif/) {
-	    $iflevel--;
-	    next LINE;
-	  } elsif (/^\%else/) {
-	    next LINE;
-	  }
-	}
-      }
-      if (/^\%else/) {
-       while (<SPECFILE>) {
-         if (/^\%endif/) {
-           $iflevel--;
-           next LINE;
-         }
-       }
-      }
-      if (/^\%endif/) {
-	$iflevel--;
-	next LINE;
-      }
-
-      if (/^\%description(?:\s+(?:-n\s+)?(.+))?/) {
-	my $subname = "main";
-	if ($1) {
-	  my $tmp = expandmacros("$1", 'g');
-	  if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
-	}
-        while (<SPECFILE>) {
-	  next if /^#/;    # Messy.  Should be possible to do better.  :/
-          redo LINE if /^\%[a-z]/;
-          $pkgdata{$subname}{desc} .= " $_";
+      next LINE if $expr != 0;        # This appears to be the only case we call false.
+      while (<SPECFILE>) {
+        if (/^\%endif/) {
+          $iflevel--;
+          next LINE;
+        } elsif (/^\%else/) {
+          next LINE;
         }
       }
-      if (/^\%package\s+(?:-n\s+)?(.+)/) {
-	# gotta expand %defines here.  Whee.
-	my $subname = expandmacros("$1", 'g');
-	if (! /-n/) { $subname = "$pkgdata{main}{name}-$1"; }
-	push @pkglist, $subname;
-	$pkgdata{$subname}{name} = $subname;
-	$pkgdata{$subname}{version} = $pkgdata{main}{version};
+    }
+    if (/^\%else/) {
+      while (<SPECFILE>) {
+        if (/^\%endif/) {
+          $iflevel--;
+          next LINE;
+        }
+      }
+    }
+    if (/^\%endif/) {
+      $iflevel--;
+      next LINE;
+    } # %if/%else/%endif
+
+# description.  not going to parse for %ifs in it.
+    if (/^\%description(?:\s+(?:-n\s+)?(.+))?/) {
+      $subname = "main";
+      if ($1) {       # Magic to add entries to the right package
+        my $tmp = expandmacros("$1", 'g');
+        if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
+      }
+      while (<SPECFILE>) {
+        next if /^#/;    # Messy.  Should be possible to do better.  :/
+        redo LINE if /^\%[a-z]/;
+        $pkgdata{$subname}{desc} .= " $_";
+      }
+    } # %description
+
+# now we pick out the sections and set "state" to parse that section.  Fugly but I can't see a better way.  >:(
+
+    if (/^\%package\s+(?:-n\s+)?(.+)/) {
+      $stage = 'package';
+      if ($1) {       # Magic to add entries to the right package
+        my $tmp = expandmacros("$1", 'g');
+        if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
+      }
+      push @pkglist, $subname;
+      $pkgdata{$subname}{name} = $subname;
+      $pkgdata{$subname}{version} = $pkgdata{main}{version};
   # Build "same arch as previous package found" by default.  Where rpm just picks the
   # *very* last one, we want to allow arch<native>+arch-all
   # (eg, Apache is i386, but apache-manual is all)
-	$pkgdata{$subname}{arch} = $buildarch;	# Since it's likely subpackages will NOT have a BuildArch line...
-	while (<SPECFILE>) {
-	  redo LINE if /^\%[a-z]/;
-	  if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
-	    $dname =~ tr/[A-Z]/[a-z]/;
-	    if ($dname =~ /^BuildArch/i) {
-	      $dvalue =~ s/^noarch/all/ig;
-	      $buildarch = $dvalue;	# Emulate rpm's behaviour to a degree
-	      $dname = 'arch';
-	    }
-	    $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'gp');
-	  }
-	}
+      $pkgdata{$subname}{arch} = $buildarch;  # Since it's likely subpackages will NOT have a BuildArch line...
+      next LINE;
+    } # %package
+
+    if (/^\%prep/) {
+      $stage = 'prep';
+      # This really should be local-ish, but we need just the filename for the source
+      $pkgdata{main}{source} =~ s|.+/([^/]+)$|$1|;
+      # Replace some core macros
+      $pkgdata{main}{source} = expandmacros($pkgdata{main}{source},'gp');
+      next LINE;
+    } # %prep
+
+    if (/^\%build/) {
+      $stage = 'build';
+      $buildscript .= "cd $tarballdir\n";
+      next LINE;
+    } # %build
+
+    if (/^\%install/) {
+      $stage = 'install';
+      $installscript .= "cd $tarballdir\n";
+      next LINE;
+    } # %install
+
+    if (/^\%clean/) {
+      $stage = 'clean';
+      $cleanscript .= "cd $tarballdir\n";
+      next LINE;
+    } # %clean
+
+    if (/^\%(pre|post|preun|postun)\b(?:\s+(?:-n\s+)?(.+))?/i) {
+      $stage = 'prepost';
+      $scriptlet = lc $1;
+      $subname = 'main';
+      if ($2) {       # Magic to add entries to the right package
+        my $tmp = expandmacros("$2", 'g');
+        if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
       }
+      next LINE;
+    } # %pre/%post/%preun/%postun
 
-##fixme:  need to allow %if contructs to work in subsections like %prep
-      if (/^\%prep/) {
-	# %prep section.  May have %setup macro;  may include %patch tags,
-	# may be just a bare shell script.
+    if (/^\%files(?:\s+(?:-n\s+)?(.+))?/) {
+      $stage = 'files';
+      $subname = 'main';
+      if ($1) {       # Magic to add entries to the right list of files
+        my $tmp = expandmacros("$1", 'g');
+        if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
+      }
+      next LINE;
+    } # %files
 
-	# This really should be local-ish, but we need just the filename for the source
-	$pkgdata{main}{source} =~ s|.+/([^/]+)$|$1|;
+    if (/^\%changelog/) {
+      $stage = 'changelog';
+      $pkgdata{main}{changelog} = '';
+      next LINE;
+    }
 
-	# Replace some core macros
-	$pkgdata{main}{source} = expandmacros($pkgdata{main}{source},'gp');
+# now we handle individual lines from the various sections
 
-PREPSCRIPT: while (<SPECFILE>) {
-	  if (/^\%setup/) {
-	    # Parse out the %setup macro.  Note that we aren't supporting
-	    # many of RPM's %setup features.
-	    $prepscript .= "cd $topdir/BUILD\n";
-	    if ( /\s+-n\s+([^\s]+)\s+/ ) {
-	      $tarballdir = $1;
-	    }
-	    $tarballdir = expandmacros($tarballdir,'gp');
-	    $prepscript .= "rm -rf $tarballdir\n";
-	    if (/\s+-c\s+/) {
-	      $prepscript .= "mkdir $tarballdir\ncd $tarballdir\n";
-	    }
-	    $prepscript .= "tar -".
+    if ($stage eq 'package') {
+      # gotta expand %defines here.  Whee.
+      if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
+        $dname =~ tr/[A-Z]/[a-z]/;
+        if ($dname =~ /^BuildArch/i) {
+          $dvalue =~ s/^noarch/all/ig;
+          $buildarch = $dvalue;     # Emulate rpm's behaviour to a degree
+          $dname = 'arch';
+        }
+        $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'gp');
+      }
+    } # package
+
+    if ($stage eq 'prep') {
+      # Actual handling for %prep section.  May have %setup macro;  may
+      # include %patch tags, may be just a bare shell script.
+      if (/^\%setup/) {
+        # Parse out the %setup macro.  Note that we aren't supporting
+        # many of RPM's %setup features.
+        $prepscript .= "cd $topdir/BUILD\n";
+        if ( /\s+-n\s+([^\s]+)\s+/ ) {
+          $tarballdir = $1;
+        }
+        $tarballdir = expandmacros($tarballdir,'gp');
+        $prepscript .= "rm -rf $tarballdir\n";
+        if (/\s+-c\s+/) {
+          $prepscript .= "mkdir $tarballdir\ncd $tarballdir\n";
+        }
+        $prepscript .= "tar -".
 		( $pkgdata{main}{source} =~ /\.tar\.gz$/ ? "z" : "" ).
 		( $pkgdata{main}{source} =~ /\.tar\.bz2$/ ? "j" : "" ).
 		( /\s+-q\s+/ ? '' : 'vv' )."xf ".
@@ -588,236 +656,174 @@ PREPSCRIPT: while (<SPECFILE>) {
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
 		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
 		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
-	  } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^\s]+)(\s+.+)?$/) ) {
-	    chomp $patchnum;
-	    $prepscript .= qq(echo "Patch #$patchnum ($pkgdata{main}{"patch$patchnum"}):"\n).
+      } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^\s]+)(\s+.+)?$/) ) {
+        chomp $patchnum;
+        $prepscript .= qq(echo "Patch #$patchnum ($pkgdata{main}{"patch$patchnum"}):"\n).
 		"patch ";
-	# If there are options passed, use'em.
-	# Otherwise, catch a bare %patch and ASS-U-ME it's '-p0'-able.
-	# Will break on options that don't provide -pnn, but what the hell.
-            $prepscript .= $patchopts if $patchopts;
-	    $prepscript .= "-p0" if !$patchopts;
-	    $prepscript .= " -s <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
-	  } else {
-	    last PREPSCRIPT if /^\%/;
-	    $prepscript .= $_;
-	  }
-	}
-	redo LINE;
+        # If there are options passed, use'em.
+        # Otherwise, catch a bare %patch and ASS-U-ME it's '-p0'-able.
+        # Will break on options that don't provide -pnn, but what the hell.
+        $prepscript .= $patchopts if $patchopts;
+        $prepscript .= "-p0" if !$patchopts;
+        $prepscript .= " -s <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
+      } else {
+        $prepscript .= $_;
       }
-      if (/^\%build/) {
-	# %build.  This is pretty much just a shell script.  There
-	# *are* a few macros, but we're not going to deal with them yet.
-	$buildscript .= "cd $tarballdir\n";
-BUILDSCRIPT: while (<SPECFILE>) {
-	  if (/^\%configure/) {
-	    $buildscript .= expandmacros($_,'cgbp');
-	  } elsif (/^\%\{__make\}/) {
-	    $buildscript .= expandmacros($_,'mgbp');
-	  } else {
-	    last BUILDSCRIPT if /^\%[^{]/;
-	    $buildscript .= $_;
-	  }
-	}
-	redo LINE;
+      next LINE;
+    } # prep
+
+    if ($stage eq 'build') {
+      # %build.  This is pretty much just a shell script.  There
+      # aren't many local macros to deal with.
+      if (/^\%configure/) {
+        $buildscript .= expandmacros($_,'cgbp');
+      } elsif (/^\%\{__make\}/) {
+        $buildscript .= expandmacros($_,'mgbp');
+      } else {
+        $buildscript .= $_;
       }
-      if (/^\%install/) {
-	$installscript .= "cd $tarballdir\n";
-INSTALLSCRIPT: while (<SPECFILE>) {
-	  if (/^\%makeinstall/) {
-            $installscript .= expandmacros($_,'igbp');
-          } else {
-            last INSTALLSCRIPT if /^\%/;
-            $installscript .= $_;
-          }
-        }
-	redo LINE;
+      next LINE;
+    } # build
+
+    if ($stage eq 'install') {
+      if (/^\%makeinstall/) {
+        $installscript .= expandmacros($_,'igbp');
+      } else {
+        $installscript .= $_;
       }
-      if (/^\%clean/) {
-	while (<SPECFILE>) {
-	  redo LINE if /^\%[a-z]/;
-	  $cleanscript .= $_;
-	}
-	$cleanscript = expandmacros($cleanscript,'gp');
-      }
+      next LINE;
+    } # install
 
-    # pre/post (un)install scripts.  Note that we expand macros later anyway, so we'll leave them unexpanded here.
-      if (/^\%(pre|post|preun|postun)\b(?:\s+(?:-n\s+)?(.+))?/i) {
-	my $scriptlet = lc $1;
-	my $pkgname = 'main';
-	if ($2) {	# Magic to add entries to the right list of files
-	  my $tmp = expandmacros("$2", 'g');
-	  if (/-n/) { $pkgname = $tmp; } else { $pkgname = "$pkgdata{main}{name}-$tmp"; }
-	}
-	while (<SPECFILE>) {
-	  redo LINE if /^\%[a-z]/;
-	  $pkgdata{$pkgname}{$scriptlet} .= $_;
-	}
-      }
-    # done %pre/%post scripts
+    if ($stage eq 'clean') {
+      $cleanscript .= $_;
+      next LINE;
+    } # clean
 
-      if (/^\%files(?:\s+(?:-n\s+)?(.+))?/) {
-	my $pkgname = 'main';
-	if ($1) {	# Magic to add entries to the right list of files
-	  my $tmp = expandmacros("$1", 'g');
-	  if (/-n/) { $pkgname = $tmp; } else { $pkgname = "$pkgdata{main}{name}-$tmp"; }
-	}
+    if ($stage eq 'prepost') {
+      $pkgdata{$subname}{$scriptlet} .= $_;
+      next LINE;
+    } # prepost
 
-	# Set this now, so it can be flipped a bit later, and used much later.
-	#$pkgdata{$pkgname}{conffiles} = 0;
-
-	while (<SPECFILE>) {
-	  chomp;
-	  next if /^#/;
-	  # need to update this to deal (properly) with %dir, %attr, etc
-	  next if /^\%dir/;
-	  next if /^\%defattr/;
-
-	  # Debian dpkg doesn't speak "%docdir".  Meh.
-	  next if /^\%docdir/;
-
+    if ($stage eq 'files') {
+      # need to update this to deal (properly) with %dir, %attr, etc
+      next LINE if /^\%dir/;
+      next LINE if /^\%defattr/;
+      # Debian dpkg doesn't speak "%docdir".  Meh.
+      next LINE if /^\%docdir/;
 ##fixme
 # Note that big chunks of this section don't match rpm's behaviour;  among other things,
 # rpm accepts more than one %-directive on one line for a file or set of files.
-	  # make sure files get suitable permissions and so on
-	  if (/^\%attr/) {
-	    # We're going to collapse whitespace before processing.  PTHBT.
-	    # While this breaks pathnames with spaces, anyone expecting command-line
-	    # tools with spaces to work (never mind work *properly* or *well*) under
-	    # any *nix has their head so far up their ass they can see out their mouth.
-	    my ($args,$filelist) = split /\)/;
-	    $filelist{$pkgname} .= " $filelist";
-	    $args =~ s/\s+//g;
-	    $args =~ s/"//g;	# don't think quotes are ever necessary, but they're *allowed*
-	    my ($perms,$owner,$group) = ($args =~ /\(([\d-]+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
+      # make sure files get suitable permissions and so on
+      if (/^\%attr/) {
+        # We're going to collapse whitespace before processing.  PTHBT.
+        # While this breaks pathnames with spaces, anyone expecting command-line
+        # tools with spaces to work (never mind work *properly* or *well*) under
+        # any *nix has their head so far up their ass they can see out their mouth.
+        my ($args,$filelist) = split /\)/;
+        $filelist{$subname} .= " $filelist";
+        $args =~ s/\s+//g;
+        $args =~ s/"//g;    # don't think quotes are ever necessary, but they're *allowed*
+        my ($perms,$owner,$group) = ($args =~ /\(([\d-]+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
 # due to Debian's total lack of real permissions-processing in its actual package
 # handling component (dpkg-deb), this can't really be done "properly".  We'll have
 # to add chown/chmod commands to the postinst instead.  Feh.
-	    $pkgdata{$pkgname}{'post'} .= "chown $owner $filelist\n" if $owner ne '-';
-	    $pkgdata{$pkgname}{'post'} .= "chgrp $group $filelist\n" if $group ne '-';
-	    $pkgdata{$pkgname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
-	    next;
-	  }
-
-	  # %doc needs extra processing, because it can be a space-separated list.
-	  if (/^\%doc/) {
-	    s/^\%doc\s+//;
-	    foreach (split()) {
-	      $filelist{$pkgname} .= " %{_docdir}/$_";
-	    }
-	    next;
-	  }
-
-	  # Conffiles.  Note that Debian and RH have similar, but not
-	  # *quite* identical ideas of what constitutes a conffile.  Nrgh.
-	  if (/^\%config\s+(.+)$/) {
-	    $pkgdata{$pkgname}{conffiles} = 1;	# Flag it for later
-	    my $tmp = $1;	# Now we can mangleificationate it.  And we probably need to.  :/
-	    $tmp = expandmacros($tmp, 'gp');  # Expand common macros
-	    if ($tmp !~ /\s+/) {
-	      # Simplest case, just a file.  Whew.
-	      push @{$pkgdata{$pkgname}{conflist}}, $tmp;
-	      $filelist{$pkgname} .= " $tmp";
-	    } else {
-	      # Wot?  Spaces?  That means extra %-macros.  Which, for the most part, can be ignored.
-	      ($tmp) = ($tmp =~ /.+\s([^\s]+)/);  # Strip everything before the last space
-	      push @{$pkgdata{$pkgname}{conflist}}, $tmp;
-	      $filelist{$pkgname} .= " $tmp";
-	    }
-	    next;
-	  }
-
-	  # and finally we can fall through %{_<FHS>}-prefixed locations...
-	  if (/^\%\{_/) {
-	    $filelist{$pkgname} .= " $_";
-	    next;
-	  }
-	# EW.  Necessary to clear up %define expansions before we exit with redo.
-	  $_ = expandmacros $_, 'g';
-
-	  # ... unknown or "next section" % directives ...
-	  redo LINE if /^\%[a-z]/;
-
-	  # ... and "normal" files
-	  $filelist{$pkgname} .= " $_";
-	}
-      } # done %file section
-
-      if (/^\%changelog/) {
-	$pkgdata{main}{changelog} = '';
-	while (<SPECFILE>) {
-	  redo LINE if /^\%[a-z]/;
-	  $pkgdata{main}{changelog} .= $_;
-	}
+        $pkgdata{$subname}{'post'} .= "chown $owner $filelist\n" if $owner ne '-';
+        $pkgdata{$subname}{'post'} .= "chgrp $group $filelist\n" if $group ne '-';
+        $pkgdata{$subname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
+        next LINE;
       }
-# don't add any segments after this (%changelog), because something in the (Perl) parser gets
-# thoroughly confuzzled if it tries to manipulate file data after EOL.  Feh.
-
-    } else {	# Data from the spec file "header"
-
-      if (/^summary:\s+(.+)/i) {
-	$pkgdata{main}{summary} = $1;
-      } elsif (/^name:\s+(.+)/i) {
-	$pkgdata{main}{name} = expandmacros($1,'g');
-      } elsif (/^version:\s+(.+)/i) {
-	$pkgdata{main}{version} = expandmacros($1,'g');
-      } elsif (/^release:\s+(.+)/i) {
-	$pkgdata{main}{release} = expandmacros($1,'g');
-      } elsif (/^group:\s+(.+)/i) {
-	$pkgdata{main}{group} = $1;
-      } elsif (/^copyright:\s+(.+)/i) {
-	$pkgdata{main}{copyright} = $1;
-      } elsif (/^url:\s+(.+)/i) {
-	$pkgdata{main}{url} = $1;
-      } elsif (/^packager:\s+(.+)/i) {
-	$pkgdata{main}{packager} = $1;
-      } elsif (/^buildroot:\s+(.+)/i) {
-	$buildroot = $1;
-      } elsif (/^source0?:\s+(.+)/i) {
-	$pkgdata{main}{source} = $1;
-	die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
-      } elsif (/^source([0-9]+):\s+(.+)/i) {
-	$pkgdata{sources}{$1} = $2;
-      } elsif (/^patch([^:]+):\s+(.+)$/i) {
-	my $patchname = "patch$1";
-	$pkgdata{main}{$patchname} = $2;
-	if ($pkgdata{main}{$patchname} =~ /\//) {
-	  # URL-style patch.  Rare but not unheard-of.
-	  my @patchbits = split '/', $pkgdata{main}{$patchname};
-	  $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
-	}
-	chomp $pkgdata{main}{$patchname};
-      } elsif (/^buildarch(?:itecture)?:\s+(.+)/i) {
-	$pkgdata{main}{arch} = $1;
-	$pkgdata{main}{arch} =~ s/^noarch$/all/;
-	$buildarch = $pkgdata{main}{arch};
-      } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
-	$buildreq .= ", $1";
-      } elsif (/^requires:\s+(.+)/i) {
-	$pkgdata{main}{requires} .= ", ".expandmacros("$1", 'gp');
-      } elsif (/^provides:\s+(.+)/i) {
-	$pkgdata{main}{provides} .= ", $1";
-      } elsif (/^conflicts:\s+(.+)/i) {
-	$pkgdata{main}{conflicts} .= ", $1";
+      # %doc needs extra processing, because it can be a space-separated list.
+      if (/^\%doc/) {
+        s/^\%doc\s+//;
+        foreach (split()) {
+          $filelist{$subname} .= " %{_docdir}/$_";
+        }
+        next LINE;
       }
-#Name: suwrap
-#Version: 0.04
-#Release: 3
-#Group: Applications/System
-#Copyright: WebHart internal ONLY.  :(
-#BuildArchitectures: i386
-#BuildRoot: /tmp/%{name}-%{version}
-#Url: http://virtual.webhart.net
-#Packager: Kris Deugau <kdeugau@deepnet.cx>
-#Source: ftp://virtual.webhart.net/%{name}-%{version}.tar.gz
+      # Conffiles.  Note that Debian and RH have similar, but not
+      # *quite* identical ideas of what constitutes a conffile.  Nrgh.
+      if (/^\%config\s+(.+)$/) {
+        $pkgdata{$subname}{conffiles} = 1;  # Flag it for later
+        my $tmp = $1;       # Now we can mangleificationate it.  And we probably need to.  :/
+        $tmp = expandmacros($tmp, 'gp');  # Expand common macros
+        if ($tmp !~ /\s+/) {
+          # Simplest case, just a file.  Whew.
+          push @{$pkgdata{$subname}{conflist}}, $tmp;
+          $filelist{$subname} .= " $tmp";
+        } else {
+          # Wot?  Spaces?  That means extra %-macros.  Which, for the most part, can be ignored.
+          ($tmp) = ($tmp =~ /.+\s([^\s]+)/);  # Strip everything before the last space
+          push @{$pkgdata{$subname}{conflist}}, $tmp;
+          $filelist{$subname} .= " $tmp";
+        }
+        next LINE;
+      }
+      # ... and finally everything else
+      $filelist{$subname} .= " $_";
+      next LINE;
+    } # files
 
+    if ($stage eq 'changelog') {
+      $pkgdata{main}{changelog} .= $_;
     }
-  }
+
+    if ($stage eq 'preamble') {
+      if (/^summary:\s+(.+)/i) {
+        $pkgdata{main}{summary} = $1;
+      } elsif (/^name:\s+(.+)/i) {
+        $pkgdata{main}{name} = expandmacros($1,'g');
+      } elsif (/^version:\s+(.+)/i) {
+        $pkgdata{main}{version} = expandmacros($1,'g');
+      } elsif (/^release:\s+(.+)/i) {
+        $pkgdata{main}{release} = expandmacros($1,'g');
+      } elsif (/^group:\s+(.+)/i) {
+        $pkgdata{main}{group} = $1;
+      } elsif (/^copyright:\s+(.+)/i) {
+        $pkgdata{main}{copyright} = $1;
+      } elsif (/^url:\s+(.+)/i) {
+        $pkgdata{main}{url} = $1;
+      } elsif (/^packager:\s+(.+)/i) {
+        $pkgdata{main}{packager} = $1;
+      } elsif (/^buildroot:\s+(.+)/i) {
+        $buildroot = $1;
+      } elsif (/^source0?:\s+(.+)/i) {
+        $pkgdata{main}{source} = $1;
+        die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
+      } elsif (/^source([0-9]+):\s+(.+)/i) {
+        $pkgdata{sources}{$1} = $2;
+      } elsif (/^patch([^:]+):\s+(.+)$/i) {
+        my $patchname = "patch$1";
+        $pkgdata{main}{$patchname} = $2;
+        if ($pkgdata{main}{$patchname} =~ /\//) {
+          # URL-style patch.  Rare but not unheard-of.
+          my @patchbits = split '/', $pkgdata{main}{$patchname};
+          $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
+        }
+        chomp $pkgdata{main}{$patchname};
+      } elsif (/^buildarch(?:itecture)?:\s+(.+)/i) {
+        $pkgdata{main}{arch} = $1;
+        $pkgdata{main}{arch} =~ s/^noarch$/all/;
+        $buildarch = $pkgdata{main}{arch};
+      } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
+        $buildreq .= ", $1";
+      } elsif (/^requires:\s+(.+)/i) {
+        $pkgdata{main}{requires} .= ", ".expandmacros("$1", 'gp');
+      } elsif (/^provides:\s+(.+)/i) {
+        $pkgdata{main}{provides} .= ", $1";
+      } elsif (/^conflicts:\s+(.+)/i) {
+        $pkgdata{main}{conflicts} .= ", $1";
+      }
+      next LINE;
+    } # preamble
+
+  } # while <SPEC>
 
   # Parse and replace some more macros.  More will be replaced even later.
 
   # Expand macros as necessary.
   $scriptletbase = expandmacros($scriptletbase,'gp');
+
+  $cleanscript = expandmacros($cleanscript,'gp');
 
   $buildroot = $cmdbuildroot if $cmdbuildroot;
   $buildroot = expandmacros($buildroot,'gp');
