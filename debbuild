@@ -539,21 +539,17 @@ LINE: while (<SPECFILE>) {
       next LINE;
     } # %if/%else/%endif
 
-# description.  not going to parse for %ifs in it.
+# now we pick out the sections and set "state" to parse that section.  Fugly but I can't see a better way.  >:(
+
     if (/^\%description(?:\s+(?:-n\s+)?(.+))?/) {
+      $stage = 'desc';
       $subname = "main";
       if ($1) {       # Magic to add entries to the right package
         my $tmp = expandmacros("$1", 'g');
         if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
       }
-      while (<SPECFILE>) {
-        next if /^#/;    # Messy.  Should be possible to do better.  :/
-        redo LINE if /^\%[a-z]/;
-        $pkgdata{$subname}{desc} .= " $_";
-      }
+      next LINE;
     } # %description
-
-# now we pick out the sections and set "state" to parse that section.  Fugly but I can't see a better way.  >:(
 
     if (/^\%package\s+(?:-n\s+)?(.+)/) {
       $stage = 'package';
@@ -626,6 +622,10 @@ LINE: while (<SPECFILE>) {
     }
 
 # now we handle individual lines from the various sections
+
+    if ($stage eq 'desc') {
+      $pkgdata{$subname}{desc} .= " $_";
+    } # description
 
     if ($stage eq 'package') {
       # gotta expand %defines here.  Whee.
