@@ -1030,7 +1030,12 @@ sub binpackage {
     if ($pkgdata{$pkg}{conffiles}) {
       open CONFLIST, ">$buildroot/$pkg/DEBIAN/conffiles";
       foreach my $conffile (@{$pkgdata{$pkg}{conflist}}) {
-	print CONFLIST "$conffile\n";
+	my @tmp = glob "$buildroot/$pkg/$conffile";
+	foreach (@tmp) {
+	  s|$buildroot/$pkg/||g;	# nrgl.  gotta be a better way to do this...
+	  s/\s+/\n/g;	# Not gonna support spaces in filenames.  Ewww.
+	  print CONFLIST "$_\n";
+	}
       }
       close CONFLIST;
     }
