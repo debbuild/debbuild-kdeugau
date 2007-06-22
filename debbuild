@@ -676,7 +676,7 @@ LINE: while (<SPECFILE>) {
         $prepscript .= "-p0" if !$patchopts;
         $prepscript .= " -s <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
       } else {
-        $prepscript .= $_;
+        $prepscript .= expandmacros($_,'gp');
       }
       next LINE;
     } # prep
@@ -689,7 +689,7 @@ LINE: while (<SPECFILE>) {
       } elsif (/^\%\{__make\}/) {
         $buildscript .= expandmacros($_,'mgbp');
       } else {
-        $buildscript .= $_;
+        $buildscript .= expandmacros($_.'gp');
       }
       next LINE;
     } # build
@@ -698,18 +698,18 @@ LINE: while (<SPECFILE>) {
       if (/^\%makeinstall/) {
         $installscript .= expandmacros($_,'igbp');
       } else {
-        $installscript .= $_;
+        $installscript .= expandmacros($_,'gp');
       }
       next LINE;
     } # install
 
     if ($stage eq 'clean') {
-      $cleanscript .= $_;
+      $cleanscript .= expandmacros($_,'gp');
       next LINE;
     } # clean
 
     if ($stage eq 'prepost') {
-      $pkgdata{$subname}{$scriptlet} .= $_;
+      $pkgdata{$subname}{$scriptlet} .= expandmacros($_,'gp');
       next LINE;
     } # prepost
 
@@ -773,6 +773,7 @@ LINE: while (<SPECFILE>) {
     } # files
 
     if ($stage eq 'changelog') {
+      # this is one of the few places we do NOT generally want to replace macros...
       $pkgdata{main}{changelog} .= $_;
     }
 
