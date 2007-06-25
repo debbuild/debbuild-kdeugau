@@ -689,7 +689,7 @@ LINE: while (<SPECFILE>) {
       } elsif (/^\%\{__make\}/) {
         $buildscript .= expandmacros($_,'mgbp');
       } else {
-        $buildscript .= expandmacros($_.'gp');
+        $buildscript .= expandmacros($_,'gp');
       }
       next LINE;
     } # build
