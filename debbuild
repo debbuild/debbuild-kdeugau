@@ -471,8 +471,8 @@ sub parse_spec {
 #	parsing right now
 
 LINE: while (<SPECFILE>) {
-    next if /^#/;       # Ignore comments...
-    next if /^\s*$/;    # ... and blank lines.
+    next if /^#/ && $stage eq 'preamble';       # Ignore comments...
+    next if /^\s*$/ && $stage eq 'preamble';    # ... and blank lines.
 
 # preprocess %define's
     if (my ($key, $def) = (/^\%define\s+([^\s]+)\s+(.+)$/) ) {
