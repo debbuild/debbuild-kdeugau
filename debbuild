@@ -150,6 +150,7 @@ my %pkgdata;
 my @pkglist = ('main');	#sigh
 # Files listing.  Embedding this in %pkgdata would be, um, messy.
 my %filelist;
+my %doclist;
 my $buildreq = '';
 
 # Scriptlets
@@ -741,11 +742,24 @@ LINE: while (<SPECFILE>) {
         $pkgdata{$subname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
         next LINE;
       }
-      # %doc needs extra processing, because it can be a space-separated list.
+      # %doc needs extra processing, because it can be a space-separated list, and may
+      # include both full and partial pathnames.  The partial pathnames must be fiddled
+      # into place in the %install script, because Debian doesn't really have the concept
+      # of "documentation file" that rpm does.  (Debian "documentation files" are files
+      # in /usr/share/doc/<packagename>.)
       if (/^\%doc/) {
         s/^\%doc\s+//;
         foreach (split()) {
-          $filelist{$subname} .= " %{_docdir}/$_";
+	  if (m|^/|) {
+            $filelist{$subname} .= " $_";	# and we process this in the processing of the install script
+	  } else {
+	    my $pkgname = $pkgdata{$subname}{name};
+	    $pkgname =~ tr/_/-/;
+
+	    $doclist{$subname} .= " $_";
+	    s|^[^/]+/||g;	# Gotta strip leading blah/ bits.  Won't handle * (well) yet...  (glob()?)
+            $filelist{$subname} .= " \%{_docdir}/$pkgname/$_";
+	  }
         }
         next LINE;
       }
@@ -893,6 +907,21 @@ sub build {
 ## install()
 # Writes and executes the %install script (mostly) built while reading the spec file.
 sub install {
+
+  # munge %doc entries into place
+  # rpm handles this with a separate executed %doc script, we're not going to bother.
+  foreach my $docpkg (keys %doclist) {
+    my $pkgname = $pkgdata{$docpkg}{name};
+    $pkgname =~ s/_/-/g;
+
+    $installscript .= "DOCDIR=\$RPM_BUILD_ROOT\%{_docdir}/$pkgname\nexport DOCDIR\n";
+    $installscript .= "mkdir -p \$DOCDIR\n";
+    $doclist{$docpkg} =~ s/^\s*//;
+    foreach (split(' ',$doclist{$docpkg})) {
+      $installscript .= "cp -pr $_ \$DOCDIR/\n";
+    }
+  }
+
   # Expand the macros
   $installscript = expandmacros($installscript,'igbp');
 
