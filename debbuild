@@ -187,13 +187,17 @@ if ($cmdopts{type} eq 'd') {
   foreach my $pkg (@pkglist) {
     $pkgdata{$pkg}{name} =~ tr/_/-/;
 
-    my $pkgfullname = "$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb";
+    my $pkgfullname = "$pkgdata{$pkg}{name}_".
+	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb";
 
     print "$pkgfullname\n" if $filelist{$pkg};
 
   }
   # Source package
-  print "$pkgdata{main}{name}-$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb\n";
+  print "$pkgdata{main}{name}-".
+	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb\n";
   exit 0;
 }
 
@@ -796,6 +800,8 @@ LINE: while (<SPECFILE>) {
         $pkgdata{main}{summary} = $1;
       } elsif (/^name:\s+(.+)/i) {
         $pkgdata{main}{name} = expandmacros($1,'g');
+      } elsif (/^epoch:\s+(.+)/i) {
+        $pkgdata{main}{epoch} = expandmacros($1,'g');
       } elsif (/^version:\s+(.+)/i) {
         $pkgdata{main}{version} = expandmacros($1,'g');
       } elsif (/^release:\s+(.+)/i) {
@@ -1035,12 +1041,16 @@ sub binpackage {
 	or die $!;
     print DEBSCRIPT $scriptletbase;
     print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
-	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb\n";
+	"$pkgdata{$pkg}{name}_".
+	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb\n";
       # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
     close DEBSCRIPT;
 
     my $control = "Package: $pkgdata{$pkg}{name}\n".
-	"Version: $pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
+	"Version: ".
+	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
 	"Section: $pkgdata{$pkg}{group}\n".
 	"Priority: optional\n".
 	"Architecture: $pkgdata{$pkg}{arch}\n".
@@ -1110,7 +1120,9 @@ sub binpackage {
 	or die "Can't exec: $!\n";
 
     $finalmessages .= "Wrote binary package ".
-	"$pkgdata{$pkg}{name}_$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb".
+	"$pkgdata{$pkg}{name}_".
+	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb".
 	" in $topdir/DEBS/$pkgdata{$pkg}{arch}\n";
     # and clean up
     unlink $debscriptfile;
@@ -1128,7 +1140,9 @@ sub binpackage {
 sub srcpackage {
   # In case we were called with -bs.
   $pkgdata{main}{name} =~ tr/_/-/;
-  my $pkgsrcname = "$pkgdata{main}{name}-$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb";
+  my $pkgsrcname = "$pkgdata{main}{name}-".
+	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"$pkgdata{main}{version}-$pkgdata{main}{release}.sdeb";
 
   my $paxcmd;
 
