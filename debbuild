@@ -29,6 +29,7 @@ use strict;
 use warnings;
 use Fcntl;	# for sysopen flags
 use Cwd 'abs_path';	# for finding where files really are
+use Config;
 
 # regex debugger
 #use re "debug";
@@ -1527,6 +1528,13 @@ sub expandmacros {
     # Misc expansions
     $macrostring =~ s|%{_arch}|$hostarch|g;
     $macrostring =~ s|%{optflags}|$optflags{$hostarch}|g;
+
+    # Perl @INC/...lib locations, and other related bits.
+    $macrostring =~ s|%{perl_archlib}|$Config{installarchlib}|g;
+    $macrostring =~ s|%{perl_sitelib}|$Config{installsitelib}|g;
+    $macrostring =~ s|%{perl_sitearch}|$Config{installsitearch}|g;
+    $macrostring =~ s|%{perl_vendorlib}|$Config{installvendorlib}|g;
+    $macrostring =~ s|%{perl_vendorarch}|$Config{installvendorarch}|g;
 
   } # done with globals section
 
