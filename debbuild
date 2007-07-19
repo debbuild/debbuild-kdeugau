@@ -1493,11 +1493,6 @@ sub expandmacros {
     # FHS-ish locations that aren't quite actually FHS-specified.
     $macrostring =~ s'%{_datadir}'/usr/share'g;
 
-    # %define's
-    foreach my $key (keys %specglobals) {
-      $macrostring =~ s|%{$key}|$specglobals{$key}|g;
-    }
-
     # special %define's.  Handle the general case where we eval anything.
     # Even more general:  %(...) is a spec-parse-time shell code wrapper.
     # Prime example:
@@ -1514,11 +1509,10 @@ sub expandmacros {
     # support for **some** %if constructs.  Note that this breaks somewhat if
     # there's no value specified...  but so does rpm.
 my $tmpcount = 0;
-    while ($macrostring =~ /(\%\{(!\?|\?!|\?)([a-z0-9_.-]+)(?:\:([a-z0-9_.-]+))?\})/g) {       #Whew....
-      my $wholemacro = $1;	# Just for precision when replacing content in multimacro lines...
-      my $qex = $2;
-      my $macro = $3;
-      my $value = $4;
+    while ($macrostring =~ /\%\{(!\?|\?!|\?)([a-z0-9_.-]+)(?:\:([a-z0-9_.-]+))?\}/g) {       #Whew....
+      my $qex = $1;
+      my $macro = $2;
+      my $value = $3;
 
       my $neg = '1' if $qex =~ /\!/;
       if ($specglobals{$macro}) {
@@ -1526,13 +1520,20 @@ my $tmpcount = 0;
       } else {
 	$value = '' if !$neg;
       }
-      $macrostring =~ s/$wholemacro/$value/;
+      $macrostring =~ s/\%\{!?\?\!?[a-z0-9_.-]+(?:\:[a-z0-9_.-]+)?\}/$value/;
 
 # not certain about this, but I don't want to run away.  It *can* happen if planned carefully.  :/
 $tmpcount++;
 die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 6;
 
     } # while()
+
+# should probably stick a "no runaway" flag in here...  Just In Case...
+    # %define's
+    while (my ($key) = ($macrostring =~ /%{([a-z0-9]+)}/i) ) {
+      $macrostring =~ s|%{$key}|$specglobals{$key}|g;
+		# wanna limit this to "... if $specglobals{$key}", but need more magic
+    }
 
     # system programs.  RPM uses a global config file for these;  we'll just
     # ASS-U-ME and make life a little simpler.
