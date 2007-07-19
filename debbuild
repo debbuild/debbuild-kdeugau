@@ -726,6 +726,8 @@ LINE: while (<SPECFILE>) {
       next LINE if /^\%defattr/;
       # Debian dpkg doesn't speak "%docdir".  Meh.
       next LINE if /^\%docdir/;
+      # dunno what to do with this; not sure if there's space in Debian's package structure for it.
+      next LINE if /^\%ghost/;
 ##fixme
 # Note that big chunks of this section don't match rpm's behaviour;  among other things,
 # rpm accepts more than one %-directive on one line for a file or set of files.
@@ -771,7 +773,11 @@ LINE: while (<SPECFILE>) {
       }
       # Conffiles.  Note that Debian and RH have similar, but not
       # *quite* identical ideas of what constitutes a conffile.  Nrgh.
-      if (/^\%config\s+(.+)$/) {
+      # Note that dpkg will always ask if you want to replace the file - noreplace
+      # is more or less permanently enabled.
+##fixme
+# also need to handle missingok (file that should be removed on uninstall)
+      if (/^\%config(?:\(noreplace\))?\s+(.+)$/) {
         $pkgdata{$subname}{conffiles} = 1;  # Flag it for later
         my $tmp = $1;       # Now we can mangleificationate it.  And we probably need to.  :/
         $tmp = expandmacros($tmp, 'gp');  # Expand common macros
