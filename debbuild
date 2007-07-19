@@ -1507,17 +1507,26 @@ sub expandmacros {
 
     # support for **some** %if constructs.  Note that this breaks somewhat if
     # there's no value specified...  but so does rpm.
-    while ($macrostring =~ /\%\{\?(\!)?([a-z0-9_.-]+)(?:\:([a-z0-9_.-]+))?\}/) {       #Whew....
-      my $neg = $1;
-      my $macro = $2;
-      my $value = $3;
+my $tmpcount = 0;
+    while ($macrostring =~ /(\%\{(!\?|\?!|\?)([a-z0-9_.-]+)(?:\:([a-z0-9_.-]+))?\})/g) {       #Whew....
+      my $wholemacro = $1;	# Just for precision when replacing content in multimacro lines...
+      my $qex = $2;
+      my $macro = $3;
+      my $value = $4;
+
+      my $neg = '1' if $qex =~ /\!/;
       if ($specglobals{$macro}) {
 	$value = '' if $neg;
       } else {
 	$value = '' if !$neg;
       }
-      $macrostring =~ s/\%\{\?\!?[a-z0-9_.-]+(?:\:[a-z0-9_.-]+)?\}/$value/;
-    }
+      $macrostring =~ s/$wholemacro/$value/;
+
+# not certain about this, but I don't want to run away.  It *can* happen if planned carefully.  :/
+$tmpcount++;
+die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 6;
+
+    } # while()
 
     # system programs.  RPM uses a global config file for these;  we'll just
     # ASS-U-ME and make life a little simpler.
