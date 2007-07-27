@@ -381,7 +381,7 @@ sub parse_cmd {
       if ($prevopt eq '--buildroot') {
 	$cmdbuildroot = $_;
       } elsif ($prevopt eq '--define') {
-	my ($macro,$value) = (/([a-z0-9_.-]+)(?:\s+(.+))?/);
+	my ($macro,$value) = (/([a-z0-9_.-]+)(?:\s+(.+))?/i);
 	if ($value) {
 	  $specglobals{$macro} = $value;
 	} else {
