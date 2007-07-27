@@ -488,7 +488,7 @@ LINE: while (<SPECFILE>) {
     # Extracted from the Maximum RPM online doc via:
     # grep -h %[a-z] *|perl -e 'while (<>) { /\%([a-z0-9]+)\b/; print "$1|\n"; }'|sort -u
     if (/^%[a-z]/ &&
-		$_ !~ /^%(?:attr|build|check|clean|config|configure|defattr|define|description|
+		$_ !~ /^%(?:attr|build|changelog|check|clean|config|configure|defattr|define|description|
 		dir|doc|docdir|else|endif|files|ghost|if|ifarch|ifn|ifnarch|ifnos|ifnxxx|fos|ifxxx|
 		install|package|patch|post|postun|pre|prep|preun|readme|setup|
 		triggerin|triggerpostun|triggerun|verify|verifyscript)\b/x
