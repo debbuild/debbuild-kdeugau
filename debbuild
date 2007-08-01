@@ -1575,9 +1575,15 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 6;
 
     } # while()
 
+    # Misc expansions
+    $macrostring =~ s|%{_arch}|$hostarch|g;
+    $macrostring =~ s|%{optflags}|$optflags{$hostarch}|g;
+
 # should probably stick a "no runaway" flag in here...  Just In Case...
     # %define's
     while (my ($key) = ($macrostring =~ /%{([a-z0-9]+)}/i) ) {
+# hrm.  This needs thinking.
+#die "A horrible death!  \%{$key}, '$macrostring'\n" if !$specglobals{$key};
       $macrostring =~ s|%{$key}|$specglobals{$key}|g;
 		# wanna limit this to "... if $specglobals{$key}", but need more magic
     }
@@ -1587,10 +1593,6 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 6;
     if ($macrostring =~ /\%\{\_\_([a-z0-9_-]+)\}/) {
       $macrostring =~ s|%{__([a-z0-9_-]+)}|$1|g;
     }
-
-    # Misc expansions
-    $macrostring =~ s|%{_arch}|$hostarch|g;
-    $macrostring =~ s|%{optflags}|$optflags{$hostarch}|g;
 
     # Perl @INC/...lib locations, and other related bits.
     $macrostring =~ s|%{perl_archlib}|$Config{installarchlib}|g;
