@@ -348,6 +348,9 @@ sub parse_cmd {
 	  $cmdopts{type} = 'd';	# d for 'diagnostic' or 'debug' or 'dump'
 	} elsif (/^--define/) {
 	  # nothing to do?  Can't see anything needed, we handle the actual definition later.
+##fixme
+# add --self-package here
+# deps build-essential pax fakeroot
 	} else {
 	  print "Long option $_ not handled\n";
 	}
