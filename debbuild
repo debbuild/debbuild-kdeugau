@@ -737,80 +737,88 @@ LINE: while (<SPECFILE>) {
     } # prepost
 
     if ($stage eq 'files') {
-      # need to update this to deal (properly) with %dir, %attr, etc
+      # need to deal with these someday
       next LINE if /^\%dir/;
       next LINE if /^\%defattr/;
-      # Debian dpkg doesn't speak "%docdir".  Meh.
-      next LINE if /^\%docdir/;
+      next LINE if /^\%verify/;
       # dunno what to do with this; not sure if there's space in Debian's package structure for it.
       next LINE if /^\%ghost/;
-##fixme
-# Note that big chunks of this section don't match rpm's behaviour;  among other things,
-# rpm accepts more than one %-directive on one line for a file or set of files.
-      # make sure files get suitable permissions and so on
-      if (/^\%attr/) {
-        # We're going to collapse whitespace before processing.  PTHBT.
-        # While this breaks pathnames with spaces, anyone expecting command-line
-        # tools with spaces to work (never mind work *properly* or *well*) under
-        # any *nix has their head so far up their ass they can see out their mouth.
-        my ($args,$filelist) = split /\)/;
-        $filelist{$subname} .= " $filelist";
-        $args =~ s/\s+//g;
-        $args =~ s/"//g;    # don't think quotes are ever necessary, but they're *allowed*
-        my ($perms,$owner,$group) = ($args =~ /\(([\d-]+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
-# due to Debian's total lack of real permissions-processing in its actual package
-# handling component (dpkg-deb), this can't really be done "properly".  We'll have
-# to add chown/chmod commands to the postinst instead.  Feh.
-        $pkgdata{$subname}{'post'} .= "chown $owner $filelist\n" if $owner ne '-';
-        $pkgdata{$subname}{'post'} .= "chgrp $group $filelist\n" if $group ne '-';
-        $pkgdata{$subname}{'post'} .= "chmod $perms $filelist\n" if $perms ne '-';
-        next LINE;
-      }
-      # %doc needs extra processing, because it can be a space-separated list, and may
-      # include both full and partial pathnames.  The partial pathnames must be fiddled
-      # into place in the %install script, because Debian doesn't really have the concept
-      # of "documentation file" that rpm does.  (Debian "documentation files" are files
-      # in /usr/share/doc/<packagename>.)
-      if (/^\%doc/) {
-        s/^\%doc\s+//;
-        foreach (split()) {
-	  if (m|^/|) {
-            $filelist{$subname} .= " $_";	# and we process this in the processing of the install script
-	  } else {
-	    my $pkgname = $pkgdata{$subname}{name};
-	    $pkgname =~ tr/_/-/;
+      # Debian dpkg doesn't speak "%docdir".  Meh.
+      next LINE if /^\%docdir/;
+#      my $singleton = 0;	# don't recall what this was for
 
-	    $doclist{$subname} .= " $_";
-	    s|^[^/]+/||g;	# Gotta strip leading blah/ bits.  Won't handle * (well) yet...  (glob()?)
-            $filelist{$subname} .= " \%{_docdir}/$pkgname/$_";
-	  }
-        }
-        next LINE;
+# create and initialize flags
+      my ($perms, $owner, $group, $conf, $filesline);
+      $perms = $owner = $group = $conf = '-';
+
+      $filesline = $_;
+
+      # strip and flag %attr constructs
+      if ($filesline =~ /\%attr\b/) {
+	# Extract %attr...
+	my ($args) = (/(\%attr\s*\(\s*[\d-]+\s*,\s*["a-zA-Z0-9-]+\s*,\s*["a-zA-Z0-9-]+\s*\))/);
+	$args =~ s/\s+//g;
+	$args =~ s/"//g;    # don't think quotes are ever necessary, but they're *allowed*
+	# ... and parse it ...
+	($perms,$owner,$group) = ($args =~ /\(([\d-]+),([a-zA-Z0-9-]+),([a-zA-Z0-9-]+)/);
+	# ... and wipe it when we're done.
+	$filesline =~ s/\%attr\s*\(\s*[\d-]+\s*,\s*["a-zA-Z0-9-]+\s*,\s*["a-zA-Z0-9-]+\s*\)//;
       }
+
       # Conffiles.  Note that Debian and RH have similar, but not
       # *quite* identical ideas of what constitutes a conffile.  Nrgh.
       # Note that dpkg will always ask if you want to replace the file - noreplace
       # is more or less permanently enabled.
 ##fixme
-# also need to handle missingok (file that should be removed on uninstall)
-      if (/^\%config(?:\(noreplace\))?\s+(.+)$/) {
+# also need to handle missingok (file that doesn't exist, but should be removed on uninstall)
+# hmm.  not sure if such is **POSSIBLE** with Debian...  maybe an addition to %post?
+      if ($filesline =~ /\%config\b(?:\s*\(\s*noreplace\s*\)\s*)?/) {
         $pkgdata{$subname}{conffiles} = 1;  # Flag it for later
-        my $tmp = $1;       # Now we can mangleificationate it.  And we probably need to.  :/
-        $tmp = expandmacros($tmp, 'gp');  # Expand common macros
-        if ($tmp !~ /\s+/) {
-          # Simplest case, just a file.  Whew.
-          push @{$pkgdata{$subname}{conflist}}, $tmp;
-          $filelist{$subname} .= " $tmp";
-        } else {
-          # Wot?  Spaces?  That means extra %-macros.  Which, for the most part, can be ignored.
-          ($tmp) = ($tmp =~ /.+\s([^\s]+)/);  # Strip everything before the last space
-          push @{$pkgdata{$subname}{conflist}}, $tmp;
-          $filelist{$subname} .= " $tmp";
-        }
-        next LINE;
+	$conf = 'y';
+	$filesline =~ s/\%config\b(?:\s*\(\s*noreplace\s*\)\s*)?//;
       }
+
+      # %doc needs extra processing, because it can be a space-separated list, and may
+      # include both full and partial pathnames.  The partial pathnames must be fiddled
+      # into place in the %install script, because Debian doesn't really have the concept
+      # of "documentation file" that rpm does.  (Debian "documentation files" are files
+      # in /usr/share/doc/<packagename>.)
+##fixme:  unhandled case: %doc %defattr.  Eeep.
+# don't really know what to do with %defattr, generally.  :(
+      if ($filesline =~ /\%doc\b/) {
+        $filesline =~ s/\s*\%doc\s+//;
+
+# this could probably go elsewhere.
+	my $pkgname = $pkgdata{$subname}{name};
+	$pkgname =~ tr/_/-/;
+
+	# have to extract the partial pathnames that %doc installs automagically
+	foreach (split /\s+/, $filesline) {
+	  if (! (/^\%/ or m|^/|) ) {
+	    $doclist{$subname} .= " $_";
+	    my ($element) = m|([^/\s]+/?)$|;
+	    $filesline =~ s|$_|\%{_docdir}/$pkgname/$element|;
+	  }
+	}
+      } # $filesline =~ /\%doc\b/
+
+      $filesline =~ s/^\s*//;	# Just In Case.  For, uh, neatness.
+
+# due to Debian's total lack of real permissions-processing in its actual package
+# handling component (dpkg-deb), this can't really be done "properly".  We'll have
+# to add chown/chmod commands to the postinst instead.  Feh.
+      $pkgdata{$subname}{'post'} .= "chown $owner $filesline\n" if $owner ne '-';
+      $pkgdata{$subname}{'post'} .= "chgrp $group $filesline\n" if $group ne '-';
+      $pkgdata{$subname}{'post'} .= "chmod $perms $filesline\n" if $perms ne '-';
+
+##fixme
+# need hackery to assure only one filespec per %config.  NB:  "*" is one filespec.  <g>
+      push @{$pkgdata{$subname}{conflist}}, $filesline if $conf ne '-';
+
+      # now that we've got the specials out of the way, we can add things to the appropriate list of files.
       # ... and finally everything else
-      $filelist{$subname} .= " $_";
+      $filelist{$subname} .= " $filesline";
+
       next LINE;
     } # files
 
