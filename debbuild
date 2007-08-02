@@ -1128,6 +1128,7 @@ sub binpackage {
     if ($pkgdata{$pkg}{conffiles}) {
       open CONFLIST, ">$buildroot/$pkg/DEBIAN/conffiles";
       foreach my $conffile (@{$pkgdata{$pkg}{conflist}}) {
+	$conffile = expandmacros($conffile, 'g');
 	my @tmp = glob "$buildroot/$pkg/$conffile";
 	foreach (@tmp) {
 	  s|$buildroot/$pkg/||g;	# nrgl.  gotta be a better way to do this...
@@ -1578,6 +1579,7 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 6;
     # Misc expansions
     $macrostring =~ s|%{_arch}|$hostarch|g;
     $macrostring =~ s|%{optflags}|$optflags{$hostarch}|g;
+    $macrostring =~ s|%{_vendor}|$specglobals{'_vendor'}|g;
 
 # should probably stick a "no runaway" flag in here...  Just In Case...
     # %define's
