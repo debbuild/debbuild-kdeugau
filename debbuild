@@ -565,6 +565,11 @@ LINE: while (<SPECFILE>) {
       next LINE;
     } # %if/%else/%endif
 
+    if (/^\%{echo:(.+)}/) {
+      my $output = expandmacros($1, 'gp');
+      print "$output\n";
+    }
+
 # now we pick out the sections and set "state" to parse that section.  Fugly but I can't see a better way.  >:(
 
     if (/^\%description(?:\s+(?:-n\s+)?(.+))?/) {
