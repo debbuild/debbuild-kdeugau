@@ -385,7 +385,7 @@ sub parse_cmd {
 	$cmdbuildroot = $_;
       } elsif ($prevopt eq '--define') {
 	my ($macro,$value) = (/([a-z0-9_.-]+)(?:\s+(.+))?/i);
-	if ($value) {
+	if ($value ne '') {
 	  $specglobals{$macro} = $value;
 	} else {
 	  warn "WARNING:  missing value for macro $macro in --define!  Ignoring.\n";
