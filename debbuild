@@ -493,7 +493,7 @@ LINE: while (<SPECFILE>) {
     if (/^%[a-z]/ &&
 		$_ !~ /^%(?:attr|build|changelog|check|clean|config|configure|defattr|define|description|
 		dir|doc|docdir|else|endif|files|ghost|if|ifarch|ifn|ifnarch|ifnos|ifnxxx|fos|ifxxx|
-		install|package|patch|post|postun|pre|prep|preun|readme|setup|
+		install|package|patch\d+|post|postun|pre|prep|preun|readme|setup|
 		triggerin|triggerpostun|triggerun|verify|verifyscript)\b/x
 	) {
 	my ($badtag) = (/^%([a-z]+)/i);
