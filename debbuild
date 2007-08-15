@@ -660,7 +660,12 @@ LINE: while (<SPECFILE>) {
 
     if ($stage eq 'package') {
       # gotta expand %defines here.  Whee.
-      if (my ($dname,$dvalue) = (/^(Summary|Group|Version|Requires|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
+# Note that we look for the Debian-specific Recommends, Suggests, and Replaces,
+# although they will have to be wrapped in '%if %{_vendor} == "debbuild"' for
+# an rpmbuild-compatible .spec file
+# NB: NOT going to support Pre-Depends, since it's a "Don't Use" (mis)feature, and
+# RPM's support for a similar tag (PreReq) has been recently dropped.
+      if (my ($dname,$dvalue) = (/^(Recommends|Suggests|Replaces|Summary|Group|Version|Requires|Conflicts|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
         $dname =~ tr/[A-Z]/[a-z]/;
         if ($dname =~ /^BuildArch/i) {
           $dvalue =~ s/^noarch/all/ig;
@@ -882,6 +887,15 @@ LINE: while (<SPECFILE>) {
         $pkgdata{main}{provides} .= ", $1";
       } elsif (/^conflicts:\s+(.+)/i) {
         $pkgdata{main}{conflicts} .= ", $1";
+      } elsif (/^recommends:\s+(.+)/i) {
+        $pkgdata{main}{recommends} .= ", $1";
+	warn "Warning:  Debian-specific 'Recommends:' outside \%if wrapper\n" if $iflevel == 0;
+      } elsif (/^suggests:\s+(.+)/i) {
+        $pkgdata{main}{suggests} .= ", $1";
+	warn "Warning:  Debian-specific 'Suggests:' outside \%if wrapper\n" if $iflevel == 0;
+      } elsif (/^replaces:\s+(.+)/i) {
+        $pkgdata{main}{replaces} .= ", $1";
+	warn "Warning:  Debian-specific 'Replaces:' outside \%if wrapper\n" if $iflevel == 0;
       } elsif (/^autoreq(?:prov)?:\s+(.+)/i) {
 	# we don't handle auto-provides (yet)
 	$NoAutoReq = 1 if $1 =~ /(?:no|0)/i;
@@ -1091,6 +1105,20 @@ sub binpackage {
       $pkgdata{$pkg}{conflicts} = expandmacros($pkgdata{$pkg}{conflicts},'gp');
     }
 
+# These are Debian-specific!
+    if (defined($pkgdata{$pkg}{recommends})) {
+      $pkgdata{$pkg}{recommends} =~ s/^, //;
+      $pkgdata{$pkg}{recommends} = expandmacros($pkgdata{$pkg}{recommends},'gp');
+    }
+    if (defined($pkgdata{$pkg}{suggests})) {
+      $pkgdata{$pkg}{suggests} =~ s/^, //;
+      $pkgdata{$pkg}{suggests} = expandmacros($pkgdata{$pkg}{suggests},'gp');
+    }
+    if (defined($pkgdata{$pkg}{replaces})) {
+      $pkgdata{$pkg}{replaces} =~ s/^, //;
+      $pkgdata{$pkg}{replaces} = expandmacros($pkgdata{$pkg}{replaces},'gp');
+    }
+
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
     mkdir "$buildroot/$pkg/DEBIAN";
 
@@ -1121,6 +1149,9 @@ sub binpackage {
 	( $pkgdata{$pkg}{requires} ne '' ? "Depends: $pkgdata{$pkg}{requires}\n" : '' ).
 	( defined($pkgdata{$pkg}{provides}) ? "Provides: $pkgdata{$pkg}{provides}\n" : '' ).
 	( defined($pkgdata{$pkg}{conflicts}) ? "Conflicts: $pkgdata{$pkg}{conflicts}\n" : '' ).
+	( defined($pkgdata{$pkg}{recommends}) ? "Recommends: $pkgdata{$pkg}{recommends}\n" : '' ).
+	( defined($pkgdata{$pkg}{suggests}) ? "Suggests: $pkgdata{$pkg}{suggests}\n" : '' ).
+	( defined($pkgdata{$pkg}{replaces}) ? "Replaces: $pkgdata{$pkg}{replaces}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
 
