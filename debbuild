@@ -34,6 +34,8 @@ use Config;
 # regex debugger
 #use re "debug";
 
+die "No .spec file to work with!  Exiting.\n" if scalar(@ARGV) == 0;
+
 # Program flow:
 # -> Parse/execute "system" config/macros (if any - should be rare)
 # -> Parse/execute "user" config/macros (if any - *my* requirement is %_topdir)
@@ -162,8 +164,6 @@ my $buildscript = '';
 # NB - rpm doesn't do this;  is it really necessary?
 my $installscript = '[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT'."\n";
 my $cleanscript = '';
-
-die "Not enough arguments\n" if #$argv == 0;
 
 # Snag some environment data
 my $tmpdir;
@@ -459,6 +459,7 @@ sub parse_cmd {
 ## parse_spec()
 # Parse the .spec file.
 sub parse_spec {
+  die "No .spec file specified!  Exiting.\n" if !$specfile;
   open SPECFILE,"<$specfile" or die "specfile ($specfile) barfed: $!";
 
   my $iflevel = 0;
