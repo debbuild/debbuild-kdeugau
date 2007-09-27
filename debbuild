@@ -1183,31 +1183,31 @@ sub binpackage {
       print PREINST "#!/bin/sh\nset -e\n\n";
       print PREINST $pkgdata{$pkg}{'pre'};
       close PREINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/preinst`;
+      chmod 0755, "$buildroot/$pkg/DEBIAN/preinst";
     }
     if ($pkgdata{$pkg}{'post'}) {
       $pkgdata{$pkg}{'post'} = expandmacros($pkgdata{$pkg}{'post'},'gp');
-      open PREINST, ">$buildroot/$pkg/DEBIAN/postinst";
-      print PREINST "#!/bin/sh\nset -e\n\n";
-      print PREINST $pkgdata{$pkg}{'post'};
-      close PREINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/postinst`;
+      open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
+      print POSTINST "#!/bin/sh\nset -e\n\n";
+      print POSTINST $pkgdata{$pkg}{'post'};
+      close POSTINST;
+      chmod 0755, "$buildroot/$pkg/DEBIAN/postinst";
     }
     if ($pkgdata{$pkg}{'preun'}) {
       $pkgdata{$pkg}{'pre'} = expandmacros($pkgdata{$pkg}{'preun'},'gp');
-      open PREINST, ">$buildroot/$pkg/DEBIAN/prerm";
-      print PREINST "#!/bin/sh\nset -e\n\n";
-      print PREINST $pkgdata{$pkg}{'preun'};
-      close PREINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/prerm`;
+      open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
+      print PREUNINST "#!/bin/sh\nset -e\n\n";
+      print PREUNINST $pkgdata{$pkg}{'preun'};
+      close PREUNINST;
+      chmod 0755, "$buildroot/$pkg/DEBIAN/prerm";
     }
     if ($pkgdata{$pkg}{'postun'}) {
       $pkgdata{$pkg}{'postun'} = expandmacros($pkgdata{$pkg}{'postun'},'gp');
-      open PREINST, ">$buildroot/$pkg/DEBIAN/postrm";
-      print PREINST "#!/bin/sh\nset -e\n\n";
-      print PREINST $pkgdata{$pkg}{'postun'};
-      close PREINST;
-      `chmod 0755 $buildroot/$pkg/DEBIAN/postrm`;
+      open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
+      print POSTUNINST "#!/bin/sh\nset -e\n\n";
+      print POSTUNINST $pkgdata{$pkg}{'postun'};
+      close POSTUNINST;
+      chmod 0755, "$buildroot/$pkg/DEBIAN/postrm";
     }
 
     # execute
