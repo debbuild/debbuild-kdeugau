@@ -1378,26 +1378,10 @@ sub checkbuildreq {
       print " * Missing build-dependency $pkg!\n";
       $reqflag = 0;
     } else {
-# gotta be a better way to do this... :/
-      if ($rel eq '>=' && !($reqver ge $ver)) {
-	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
+      my ($resp) = qx { dpkg --compare-versions $reqver '$rel' $ver && echo "ok" };
+      if ($resp !~ /^ok/) {
 	$reqflag = 0;
-      }
-      if ($rel eq '>' && !($reqver gt $ver)) {
-	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
-	$reqflag = 0;
-      }
-      if ($rel eq '<=' && !($reqver le $ver)) {
-	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
-	$reqflag = 0;
-      }
-      if ($rel eq '<' && !($reqver lt $ver)) {
-	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
-	$reqflag = 0;
-      }
-      if ($rel eq '=' && !($reqver eq $ver)) {
-	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n";
-	$reqflag = 0;
+	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n"
       }
     } # end not installed/installed check
   } # end req loop
