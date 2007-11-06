@@ -842,32 +842,32 @@ LINE: while (<SPECFILE>) {
     }
 
     if ($stage eq 'preamble') {
-      if (/^summary:\s+(.+)/i) {
+      if (/^summary:\s*(.+)/i) {
         $pkgdata{main}{summary} = $1;
-      } elsif (/^name:\s+(.+)/i) {
+      } elsif (/^name:\s*(.+)/i) {
         $pkgdata{main}{name} = expandmacros($1,'g');
-      } elsif (/^epoch:\s+(.+)/i) {
+      } elsif (/^epoch:\s*(.+)/i) {
         $pkgdata{main}{epoch} = expandmacros($1,'g');
-      } elsif (/^version:\s+(.+)/i) {
+      } elsif (/^version:\s*(.+)/i) {
         $pkgdata{main}{version} = expandmacros($1,'g');
-      } elsif (/^release:\s+(.+)/i) {
+      } elsif (/^release:\s*(.+)/i) {
         $pkgdata{main}{release} = expandmacros($1,'g');
-      } elsif (/^group:\s+(.+)/i) {
+      } elsif (/^group:\s*(.+)/i) {
         $pkgdata{main}{group} = $1;
-      } elsif (/^copyright:\s+(.+)/i) {
+      } elsif (/^copyright:\s*(.+)/i) {
         $pkgdata{main}{copyright} = $1;
-      } elsif (/^url:\s+(.+)/i) {
+      } elsif (/^url:\s*(.+)/i) {
         $pkgdata{main}{url} = $1;
-      } elsif (/^packager:\s+(.+)/i) {
+      } elsif (/^packager:\s*(.+)/i) {
         $pkgdata{main}{packager} = $1;
-      } elsif (/^buildroot:\s+(.+)/i) {
+      } elsif (/^buildroot:\s*(.+)/i) {
         $buildroot = $1;
-      } elsif (/^source0?:\s+(.+)/i) {
+      } elsif (/^source0?:\s*(.+)/i) {
         $pkgdata{main}{source} = $1;
         die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
-      } elsif (/^source([0-9]+):\s+(.+)/i) {
+      } elsif (/^source([0-9]+):\s*(.+)/i) {
         $pkgdata{sources}{$1} = $2;
-      } elsif (/^patch([^:]+):\s+(.+)$/i) {
+      } elsif (/^patch([^:]+):\s*(.+)$/i) {
         my $patchname = "patch$1";
         $pkgdata{main}{$patchname} = $2;
         if ($pkgdata{main}{$patchname} =~ /\//) {
@@ -876,28 +876,28 @@ LINE: while (<SPECFILE>) {
           $pkgdata{main}{$patchname} = $patchbits[$#patchbits];
         }
         chomp $pkgdata{main}{$patchname};
-      } elsif (/^buildarch(?:itecture)?:\s+(.+)/i) {
+      } elsif (/^buildarch(?:itecture)?:\s*(.+)/i) {
         $pkgdata{main}{arch} = $1;
         $pkgdata{main}{arch} =~ s/^noarch$/all/;
         $buildarch = $pkgdata{main}{arch};
-      } elsif (/^buildreq(?:uires)?:\s+(.+)/i) {
+      } elsif (/^buildreq(?:uires)?:\s*(.+)/i) {
         $buildreq .= ", $1";
-      } elsif (/^requires:\s+(.+)/i) {
+      } elsif (/^requires:\s*(.+)/i) {
         $pkgdata{main}{requires} .= ", ".expandmacros("$1", 'gp');
-      } elsif (/^provides:\s+(.+)/i) {
+      } elsif (/^provides:\s*(.+)/i) {
         $pkgdata{main}{provides} .= ", $1";
-      } elsif (/^conflicts:\s+(.+)/i) {
+      } elsif (/^conflicts:\s*(.+)/i) {
         $pkgdata{main}{conflicts} .= ", $1";
-      } elsif (/^recommends:\s+(.+)/i) {
+      } elsif (/^recommends:\s*(.+)/i) {
         $pkgdata{main}{recommends} .= ", $1";
 	warn "Warning:  Debian-specific 'Recommends:' outside \%if wrapper\n" if $iflevel == 0;
-      } elsif (/^suggests:\s+(.+)/i) {
+      } elsif (/^suggests:\s*(.+)/i) {
         $pkgdata{main}{suggests} .= ", $1";
 	warn "Warning:  Debian-specific 'Suggests:' outside \%if wrapper\n" if $iflevel == 0;
-      } elsif (/^replaces:\s+(.+)/i) {
+      } elsif (/^replaces:\s*(.+)/i) {
         $pkgdata{main}{replaces} .= ", $1";
 	warn "Warning:  Debian-specific 'Replaces:' outside \%if wrapper\n" if $iflevel == 0;
-      } elsif (/^autoreq(?:prov)?:\s+(.+)/i) {
+      } elsif (/^autoreq(?:prov)?:\s*(.+)/i) {
 	# we don't handle auto-provides (yet)
 	$NoAutoReq = 1 if $1 =~ /(?:no|0)/i;
       }
