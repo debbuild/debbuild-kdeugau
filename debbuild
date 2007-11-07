@@ -72,7 +72,8 @@ my %cmdopts = (type => '',
 		short => 'n'
 	);
 my $topdir = "/usr/src/debian";
-my $buildroot = "%{_tmppath}/%{name}-%{version}-%{release}.root".int(rand(99998)+1);
+#my $specglobals{buildroot} = "%{_tmppath}/%{name}-%{version}-%{release}.root".int(rand(99998)+1);
+$specglobals{buildroot} = '';
 
 # "Constants"
 my %targets = ('p' => 'Prep',
@@ -568,7 +569,7 @@ LINE: while (<SPECFILE>) {
 
     if (/^\%{echo:(.+)}/) {
       my $output = expandmacros($1, 'gp');
-      print "$output\n";
+      print "$output";
     }
 
 # now we pick out the sections and set "state" to parse that section.  Fugly but I can't see a better way.  >:(
@@ -861,7 +862,7 @@ LINE: while (<SPECFILE>) {
       } elsif (/^packager:\s*(.+)/i) {
         $pkgdata{main}{packager} = $1;
       } elsif (/^buildroot:\s*(.+)/i) {
-        $buildroot = $1;
+        $specglobals{buildroot} = $1;
       } elsif (/^source0?:\s*(.+)/i) {
         $pkgdata{main}{source} = $1;
         die "Unknown tarball format $1\n" if $1 !~ /\.tar\.(?:gz|bz2)$/;
@@ -913,8 +914,8 @@ LINE: while (<SPECFILE>) {
 
   $cleanscript = expandmacros($cleanscript,'gp');
 
-  $buildroot = $cmdbuildroot if $cmdbuildroot;
-  $buildroot = expandmacros($buildroot,'gp');
+  $specglobals{buildroot} = $cmdbuildroot if $cmdbuildroot;
+  $specglobals{buildroot} = expandmacros($specglobals{buildroot},'gp');
 
   close SPECFILE;
 } # end parse_spec()
@@ -1008,16 +1009,16 @@ sub install {
   # final bit: compress manpages if present
   # done here cuz I don't grok shell well
   # should probably error-check all kinds of things.  <g>
-  if (opendir MANROOT, "$buildroot/usr/share/man") {
+  if (opendir MANROOT, "$specglobals{buildroot}/usr/share/man") {
     my @mansects = readdir MANROOT;
     closedir MANROOT;
     foreach my $mandir (@mansects) {
       next if $mandir !~ /^man/;
-      opendir MANPAGES, "$buildroot/usr/share/man/$mandir";
+      opendir MANPAGES, "$specglobals{buildroot}/usr/share/man/$mandir";
       my @pagelist = readdir MANPAGES;
       closedir MANPAGES;			# Slightly safer to to this;  no accidental recursion.  O_o
       foreach my $manpage (@pagelist) {
-        $manpage = "$buildroot/usr/share/man/$mandir/$manpage";
+        $manpage = "$specglobals{buildroot}/usr/share/man/$mandir/$manpage";
         if ( -f $manpage) {
 	  if ($manpage =~ /^(.+)\.(?:Z|gz|bz2)\n?$/) {
 	    my $newpage = $1;
@@ -1040,7 +1041,7 @@ sub install {
 
 
 ## binpackage()
-# Creates the binary .deb package from the installed tree in $buildroot.
+# Creates the binary .deb package from the installed tree in $specglobals{buildroot}.
 # Writes and executes a shell script to do so.
 # Creates miscellaneous files required by dpkg-deb to actually build the package file.
 # Should handle simple subpackages
@@ -1062,7 +1063,7 @@ sub binpackage {
     next if (!$filelist{$pkg} or $filelist{$pkg} =~ /^\s*$/);
 
     # Gotta do this first, otherwise we don't have a place to move files from %files
-    mkdir "$buildroot/$pkg";
+    mkdir "$specglobals{buildroot}/$pkg";
 
     # Eliminate any lingering % macros
     $filelist{$pkg} = expandmacros $filelist{$pkg}, 'g';
@@ -1074,9 +1075,9 @@ sub binpackage {
       # Feh.  Manpages don't **NEED** to be gzipped, but rpmbuild does, and so shall we.
       if ($pkgfile =~ m|/usr/share/man/man|) {
 	# need to check to see if manpage is gzipped
-	if (-e "$buildroot$pkgfile") {
+	if (-e "$specglobals{buildroot}$pkgfile") {
 	  if ($pkgfile !~ m|\.gz$|) {
-	    qx { gzip $buildroot$pkgfile };
+	    qx { gzip $specglobals{buildroot}$pkgfile };
 	    $pkgfile .= ".gz";
 	  }
 	} else {
@@ -1084,22 +1085,22 @@ sub binpackage {
 	    $pkgfile .= ".gz";
 	  } else {
 	    $pkgfile =~ s/\.gz$//;
-	    qx { gzip $buildroot$pkgfile };
+	    qx { gzip $specglobals{buildroot}$pkgfile };
 	    $pkgfile .= ".gz";
 	  }
 	}
       }
 
       my ($fpath,$fname) = ($pkgfile =~ m|(.+?/?)?([^/]+/?)$|);	# We don't need $fname now, but we might.
-      qx { mkdir -p $buildroot/$pkg$fpath }
+      qx { mkdir -p $specglobals{buildroot}/$pkg$fpath }
 	if $fpath && $fpath ne '';
-      qx { mv $buildroot$pkgfile $buildroot/$pkg$fpath };
+      qx { mv $specglobals{buildroot}$pkgfile $specglobals{buildroot}/$pkg$fpath };
     }
 
     # Get the "Depends" (Requires) a la RPM.  Ish.  We strip the leading
     # comma and space here (if needed) in case there were "Requires" specified
     # in the spec file - those would precede these.
-    $pkgdata{$pkg}{requires} .= getreqs("$buildroot/$pkg") if ! $NoAutoReq;
+    $pkgdata{$pkg}{requires} .= getreqs("$specglobals{buildroot}/$pkg") if ! $NoAutoReq;
 
     # magic needed to properly version dependencies...
     # only provided deps will really be included
@@ -1153,7 +1154,7 @@ sub binpackage {
     }
 
     # Gotta do this next, otherwise the control file has nowhere to go.  >:(
-    mkdir "$buildroot/$pkg/DEBIAN";
+    mkdir "$specglobals{buildroot}/$pkg/DEBIAN";
 
     # Hack the filename for the package into a Debian-tool-compatible format.  GRRRRRR!!!!!
     # Have I mentioned I hate Debian Policy?
@@ -1164,7 +1165,7 @@ sub binpackage {
     sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die $!;
     print DEBSCRIPT $scriptletbase;
-    print DEBSCRIPT "fakeroot dpkg-deb -b $buildroot/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
+    print DEBSCRIPT "fakeroot dpkg-deb -b $specglobals{buildroot}/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
 	"$pkgdata{$pkg}{name}_".
 	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
 	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb\n";
@@ -1188,19 +1189,19 @@ sub binpackage {
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
 
-    open CONTROL, ">$buildroot/$pkg/DEBIAN/control";
+    open CONTROL, ">$specglobals{buildroot}/$pkg/DEBIAN/control";
     print CONTROL $control;
     close CONTROL;
 
     # Iff there are conffiles (as specified in the %files list(s), add'em
     # in so dpkg-deb can tag them.
     if ($pkgdata{$pkg}{conffiles}) {
-      open CONFLIST, ">$buildroot/$pkg/DEBIAN/conffiles";
+      open CONFLIST, ">$specglobals{buildroot}/$pkg/DEBIAN/conffiles";
       foreach my $conffile (@{$pkgdata{$pkg}{conflist}}) {
 	$conffile = expandmacros($conffile, 'g');
-	my @tmp = glob "$buildroot/$pkg/$conffile";
+	my @tmp = glob "$specglobals{buildroot}/$pkg/$conffile";
 	foreach (@tmp) {
-	  s|$buildroot/$pkg/||g;	# nrgl.  gotta be a better way to do this...
+	  s|$specglobals{buildroot}/$pkg/||g;	# nrgl.  gotta be a better way to do this...
 	  s/\s+/\n/g;	# Not gonna support spaces in filenames.  Ewww.
 	  print CONFLIST "$_\n";
 	}
@@ -1211,35 +1212,35 @@ sub binpackage {
     # found the point of scripts on subpackages.
     if ($pkgdata{$pkg}{'pre'}) {
       $pkgdata{$pkg}{'pre'} = expandmacros($pkgdata{$pkg}{'pre'},'gp');
-      open PREINST, ">$buildroot/$pkg/DEBIAN/preinst";
+      open PREINST, ">$specglobals{buildroot}/$pkg/DEBIAN/preinst";
       print PREINST "#!/bin/sh\nset -e\n\n";
       print PREINST $pkgdata{$pkg}{'pre'};
       close PREINST;
-      chmod 0755, "$buildroot/$pkg/DEBIAN/preinst";
+      chmod 0755, "$specglobals{buildroot}/$pkg/DEBIAN/preinst";
     }
     if ($pkgdata{$pkg}{'post'}) {
       $pkgdata{$pkg}{'post'} = expandmacros($pkgdata{$pkg}{'post'},'gp');
-      open POSTINST, ">$buildroot/$pkg/DEBIAN/postinst";
+      open POSTINST, ">$specglobals{buildroot}/$pkg/DEBIAN/postinst";
       print POSTINST "#!/bin/sh\nset -e\n\n";
       print POSTINST $pkgdata{$pkg}{'post'};
       close POSTINST;
-      chmod 0755, "$buildroot/$pkg/DEBIAN/postinst";
+      chmod 0755, "$specglobals{buildroot}/$pkg/DEBIAN/postinst";
     }
     if ($pkgdata{$pkg}{'preun'}) {
       $pkgdata{$pkg}{'pre'} = expandmacros($pkgdata{$pkg}{'preun'},'gp');
-      open PREUNINST, ">$buildroot/$pkg/DEBIAN/prerm";
+      open PREUNINST, ">$specglobals{buildroot}/$pkg/DEBIAN/prerm";
       print PREUNINST "#!/bin/sh\nset -e\n\n";
       print PREUNINST $pkgdata{$pkg}{'preun'};
       close PREUNINST;
-      chmod 0755, "$buildroot/$pkg/DEBIAN/prerm";
+      chmod 0755, "$specglobals{buildroot}/$pkg/DEBIAN/prerm";
     }
     if ($pkgdata{$pkg}{'postun'}) {
       $pkgdata{$pkg}{'postun'} = expandmacros($pkgdata{$pkg}{'postun'},'gp');
-      open POSTUNINST, ">$buildroot/$pkg/DEBIAN/postrm";
+      open POSTUNINST, ">$specglobals{buildroot}/$pkg/DEBIAN/postrm";
       print POSTUNINST "#!/bin/sh\nset -e\n\n";
       print POSTUNINST $pkgdata{$pkg}{'postun'};
       close POSTUNINST;
-      chmod 0755, "$buildroot/$pkg/DEBIAN/postrm";
+      chmod 0755, "$specglobals{buildroot}/$pkg/DEBIAN/postrm";
     }
 
     # execute
@@ -1485,7 +1486,7 @@ sub expandmacros {
   my $section = shift;
 
   # To allow the FHS-ish %configure and %makeinstall to work The Right Way.
-  # (Without clobbering the global $buildroot.)
+  # (Without clobbering the global $specglobals{buildroot}.)
   my $prefix = '';
 
   if ($section =~ /c/) {
@@ -1513,10 +1514,25 @@ sub expandmacros {
     $macrostring =~ s'%{__make}'make ';
   } # done make
 
+# %makeinstall expands with recursive macros in rpm.  whee.
   if ($section =~ /i/) {
     # This is where we need to mangle $prefix.
-    $macrostring =~ s'%makeinstall'make %{fhs} install';
-    $prefix = $buildroot;
+    $macrostring =~ s'%makeinstall'make \
+        prefix=%{?buildroot:%{buildroot}}%{_prefix} \
+        exec_prefix=%{?buildroot:%{buildroot}}%{_exec_prefix} \
+        bindir=%{?buildroot:%{buildroot}}%{_bindir} \
+        sbindir=%{?buildroot:%{buildroot}}%{_sbindir} \
+        sysconfdir=%{?buildroot:%{buildroot}}%{_sysconfdir} \
+        datadir=%{?buildroot:%{buildroot}}%{_datadir} \
+        includedir=%{?buildroot:%{buildroot}}%{_includedir} \
+        libdir=%{?buildroot:%{buildroot}}%{_libdir} \
+        libexecdir=%{?buildroot:%{buildroot}}%{_libexecdir} \
+        localstatedir=%{?buildroot:%{buildroot}}%{_localstatedir} \
+        sharedstatedir=%{?buildroot:%{buildroot}}%{_sharedstatedir} \
+        mandir=%{?buildroot:%{buildroot}}%{_mandir} \
+        infodir=%{?buildroot:%{buildroot}}%{_infodir} \
+  install ';
+    $prefix = $specglobals{buildroot};
   } # done %install and/or %makeinstall
 
   # Build data
@@ -1565,7 +1581,7 @@ sub expandmacros {
 
   # Package data
   if ($section =~ /p/) {
-    $macrostring =~ s/\%\{buildroot\}/$buildroot/gi;
+    $macrostring =~ s/\%\{buildroot\}/$specglobals{buildroot}/gi;
     foreach my $source (keys %{$pkgdata{sources}}) {
       $macrostring =~ s/\%\{source$source\}/$topdir\/SOURCES\/$pkgdata{sources}{$source}/gi;
     }
@@ -1609,11 +1625,12 @@ sub expandmacros {
 
     # support for **some** %if constructs.  Note that this breaks somewhat if
     # there's no value specified...  but so does rpm.
-my $tmpcount = 0;
-    while ($macrostring =~ /\%\{(!\?|\?!|\?)([a-z0-9_.-]+)(?:\:([a-z0-9_.-]+))?\}/g) {       #Whew....
+
+    my $tmpcount = 0;	# runaway shutdown.  Not really sure how else to avoid getting stuck.
+    while ($macrostring =~ m/\%\{([?!]+)([a-z0-9_.-]+)(?:\:([a-z0-9_.\/\-\\]+)?)?\}/g) {       #Whew....
       my $qex = $1;
       my $macro = $2;
-      my $value = $3;
+      my $value = (defined($3) ? $3 : '');
 
       my $neg = '1' if $qex =~ /\!/;
       if ($specglobals{$macro}) {
@@ -1621,11 +1638,12 @@ my $tmpcount = 0;
       } else {
 	$value = '' if !$neg;
       }
-      $macrostring =~ s/\%\{!?\?\!?[a-z0-9_.-]+(?:\:[a-z0-9_.-]+)?\}/$value/;
+      $macrostring =~ s/\%\{[?!]+[a-z0-9_.-]+(?:\:([a-z0-9_.\/\-\\]+)?)?\}/$value/;
 
 # not certain about this, but I don't want to run away.  It *can* happen if planned carefully.  :/
 $tmpcount++;
-die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 6;
+# %makeinstall has 13 occurrences.  D'Oh!
+die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 14;
 
     } # while()
 
