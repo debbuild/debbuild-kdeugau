@@ -148,7 +148,7 @@ my %distmap = (
 # Package data
 # This is the form of $pkgdata{pkgname}{meta}
 # meta includes Summary, Name, Version, Release, Group, Copyright,
-#	Source, URL, Packager, BuildRoot, Description, BuildReq(uires),
+#	Source, URL, Packager, BuildRoot, Description, BuildRequires,
 #	Requires, Provides
 # 10/31/2005 Maybe this should be flatter?  -kgd
 my %pkgdata;
@@ -881,7 +881,7 @@ LINE: while (<SPECFILE>) {
         $pkgdata{main}{arch} = $1;
         $pkgdata{main}{arch} =~ s/^noarch$/all/;
         $buildarch = $pkgdata{main}{arch};
-      } elsif (/^buildreq(?:uires)?:\s*(.+)/i) {
+      } elsif (/^buildrequires:\s*(.+)/i) {
         $buildreq .= ", $1";
       } elsif (/^requires:\s*(.+)/i) {
         $pkgdata{main}{requires} .= ", ".expandmacros("$1", 'gp');
