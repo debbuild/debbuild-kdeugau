@@ -19,7 +19,7 @@ install:
 
 	mkdir -p $(DESTDIR)$(MANDIR)/man8
 	pod2man --center="DeepNet Dev Tools" --section 8 \
-		repoput | gzip > $(DESTDIR)$(MANDIR)/man8/debbuild.8.gz
+		debbuild | gzip > $(DESTDIR)$(MANDIR)/man8/debbuild.8.gz
 
 dist:
 	mkdir $(PKGNAME)-$(VERSION)

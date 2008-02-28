@@ -50,6 +50,7 @@ Recommends: patch
 Suggests: rpm, subversion
 %endif
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
+BuildArch: noarch
 
 %description
 debbuild attempts to build Debian-friendly semi-native packages from
@@ -68,21 +69,18 @@ rebuild .src.rpm source packages as .deb binary packages.
 %setup -q
 
 %build
-# Steps to compile the source
-%configure
-make
+# nothing to do here
 
 %install
 # Steps to install to a temporary location for packaging
 [ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
-%makeinstall
+make install DESTDIR=$RPM_BUILD_ROOT
 
 # Fill in the pathnames to be packaged here
 %files
 %{_bindir}/*
-%{_mandir}/man1/*
-%doc README
+%{_mandir}/man8/*
 
 %changelog
-* Mon Jan 01 1900  Name <email@site> -relnum
-- Packaging comment
+* Thu Feb 28 2008  Kris Deugau <kdeugau@deepnet.cx> -1
+- Initial package
