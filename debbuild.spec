@@ -46,7 +46,7 @@ License: GPLv2
 Packager: Kris Deugau <kdeugau@deepnet.cx>
 Requires: perl, build-essential, pax, fakeroot
 %if %{_vendor} == "debbuild"
-Recommends: patch
+Recommends: patch, bzip2
 Suggests: rpm, subversion
 %endif
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
