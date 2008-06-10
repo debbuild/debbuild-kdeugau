@@ -667,7 +667,7 @@ LINE: while (<SPECFILE>) {
 # an rpmbuild-compatible .spec file
 # NB: NOT going to support Pre-Depends, since it's a "Don't Use" (mis)feature, and
 # RPM's support for a similar tag (PreReq) has been recently dropped.
-      if (my ($dname,$dvalue) = (/^(Recommends|Suggests|Replaces|Summary|Group|Version|Requires|Conflicts|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
+      if (my ($dname,$dvalue) = (/^(Recommends|Suggests|Enhances|Replaces|Summary|Group|Version|Requires|Conflicts|Provides|BuildArch(?:itecture)?):\s+(.+)$/i)) {
         $dname =~ tr/[A-Z]/[a-z]/;
         if ($dname =~ /^BuildArch/i) {
           $dvalue =~ s/^noarch/all/ig;
@@ -895,6 +895,9 @@ LINE: while (<SPECFILE>) {
       } elsif (/^suggests:\s*(.+)/i) {
         $pkgdata{main}{suggests} .= ", $1";
 	warn "Warning:  Debian-specific 'Suggests:' outside \%if wrapper\n" if $iflevel == 0;
+      } elsif (/^enhances:\s*(.+)/i) {
+        $pkgdata{main}{enhances} .= ", $1";
+	warn "Warning:  Debian-specific 'Enahnces:' outside \%if wrapper\n" if $iflevel == 0;
       } elsif (/^replaces:\s*(.+)/i) {
         $pkgdata{main}{replaces} .= ", $1";
 	warn "Warning:  Debian-specific 'Replaces:' outside \%if wrapper\n" if $iflevel == 0;
@@ -1148,6 +1151,10 @@ sub binpackage {
       $pkgdata{$pkg}{suggests} =~ s/^, //;
       $pkgdata{$pkg}{suggests} = expandmacros($pkgdata{$pkg}{suggests},'gp');
     }
+    if (defined($pkgdata{$pkg}{enhances})) {
+      $pkgdata{$pkg}{enhances} =~ s/^, //;
+      $pkgdata{$pkg}{enhances} = expandmacros($pkgdata{$pkg}{enhances},'gp');
+    }
     if (defined($pkgdata{$pkg}{replaces})) {
       $pkgdata{$pkg}{replaces} =~ s/^, //;
       $pkgdata{$pkg}{replaces} = expandmacros($pkgdata{$pkg}{replaces},'gp');
@@ -1185,6 +1192,7 @@ sub binpackage {
 	( defined($pkgdata{$pkg}{conflicts}) ? "Conflicts: $pkgdata{$pkg}{conflicts}\n" : '' ).
 	( defined($pkgdata{$pkg}{recommends}) ? "Recommends: $pkgdata{$pkg}{recommends}\n" : '' ).
 	( defined($pkgdata{$pkg}{suggests}) ? "Suggests: $pkgdata{$pkg}{suggests}\n" : '' ).
+	( defined($pkgdata{$pkg}{enhances}) ? "Enhances: $pkgdata{$pkg}{enhances}\n" : '' ).
 	( defined($pkgdata{$pkg}{replaces}) ? "Replaces: $pkgdata{$pkg}{replaces}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
     $control .= "$pkgdata{$pkg}{desc}\n";
