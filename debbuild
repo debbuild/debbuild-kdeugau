@@ -1439,7 +1439,9 @@ sub getreqs() {
     next if m|/lib(?:64)?/ld-linux|;	# Hack! Hack!  PTHBTT!  (libc suxx0rz)
     next if /linux-gate.so/;		# Kernel hackery for teh W1n!!1!1eleventy-one!1  (Don't ask.  Feh.)
 
-    my ($req) = (/^\s+([a-z0-9._-]+)/); # dig out the actual library (so)name
+    my ($req) = (m|=\>\s+([a-z0-9._/-]+)|); # dig out the actual library (so)name.
+	# And feh, we need the *path*, since I've discovered a new edge case where
+	# the same libnnn.1.2.3 *file*name is found across *several* lib dirs.  >:(
 
     # Ignore libs provided by this package.  Note that we don't match
     # on word-boundary at the *end* of the lib we're looking for, as the
