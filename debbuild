@@ -63,6 +63,7 @@ my $tarballdir = '%{name}-%{version}';	# We do this in case of a spec file not u
 my %specglobals;	# For %define's in specfile, among other things.
 
 $specglobals{'_vendor'} = 'debbuild';
+$specglobals{'vendor'} = 'debbuild';
 
 # Initialized globals
 my $verbosity = 0;
