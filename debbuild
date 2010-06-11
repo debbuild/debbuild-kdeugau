@@ -598,7 +598,7 @@ LINE: while (<SPECFILE>) {
       $stage = 'desc';
       $subname = "main";
       if ($1) {       # Magic to add entries to the right package
-        my $tmp = expandmacros("$1", 'g');
+        my $tmp = expandmacros("$1", 'gp');
         if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
       }
       next LINE;
@@ -607,7 +607,7 @@ LINE: while (<SPECFILE>) {
     if (/^\%package\s+(?:-n\s+)?(.+)/) {
       $stage = 'package';
       if ($1) {       # Magic to add entries to the right package
-        my $tmp = expandmacros("$1", 'g');
+        my $tmp = expandmacros("$1", 'gp');
         if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
       }
       push @pkglist, $subname;
@@ -662,7 +662,7 @@ LINE: while (<SPECFILE>) {
       $stage = 'files';
       $subname = 'main';
       if ($1) {       # Magic to add entries to the right list of files
-        my $tmp = expandmacros("$1", 'g');
+        my $tmp = expandmacros("$1", 'gp');
         if (/-n/) { $subname = $tmp; } else { $subname = "$pkgdata{main}{name}-$tmp"; }
       }
       next LINE;
@@ -1097,12 +1097,24 @@ sub binpackage {
       $pkgfile = expandmacros($pkgfile, 'gp');
 
       # Feh.  Manpages don't **NEED** to be gzipped, but rpmbuild does, and so shall we.
-      if ($pkgfile =~ m|/usr/share/man/man|) {
+      # ... and your little info page too!
+      if ($pkgfile =~ m{/usr/share/(?:man/man|info)}) {
 	# need to check to see if manpage is gzipped
 	if (-e "$specglobals{buildroot}$pkgfile") {
-	  if ($pkgfile !~ m|\.gz$|) {
-	    qx { gzip $specglobals{buildroot}$pkgfile };
-	    $pkgfile .= ".gz";
+	  # if we've just been pointed to a manpage section with "many" pages,
+	  # we need to gzip them all.
+	  # fortunately, we do NOT need to explicitly track each file for the
+	  # purpose of stuffing them in the package...  the original %files
+	  # entry will do just fine.
+	  if ( -d "$specglobals{buildroot}$pkgfile") {
+	    foreach my $globfile (glob("$specglobals{buildroot}$pkgfile/*")) {
+	      gzip $globfile if $globfile !~ m|\.gz$|;
+	    }
+	  } else {
+	    if ($pkgfile !~ m|\.gz$|) {
+	      qx { gzip $specglobals{buildroot}$pkgfile };
+	      $pkgfile .= ".gz";
+	    }
 	  }
 	} else {
 	  if ($pkgfile !~ m|\.gz$|) {
@@ -1635,6 +1647,7 @@ sub expandmacros {
     $macrostring =~ s'%{_bindir}'/usr/bin'g;
     $macrostring =~ s'%{_sbindir}'/usr/sbin'g;
     $macrostring =~ s'%{_mandir}'%{_datadir}/man'g;
+    $macrostring =~ s'%{_infodir}'%{_datadir}/info'g;
     $macrostring =~ s'%{_includedir}'/usr/include'g;
     $macrostring =~ s'%{_libdir}'/usr/lib'g;
     $macrostring =~ s'%{_sysconfdir}'/etc'g;
