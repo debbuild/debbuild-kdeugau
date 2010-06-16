@@ -725,14 +725,28 @@ LINE: while (<SPECFILE>) {
 		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
       } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^\s]+)(\s+.+)?$/) ) {
         chomp $patchnum;
-        $prepscript .= qq(echo "Patch #$patchnum ($pkgdata{main}{"patch$patchnum"}):"\n).
-		"patch ";
-        # If there are options passed, use'em.
-        # Otherwise, catch a bare %patch and ASS-U-ME it's '-p0'-able.
-        # Will break on options that don't provide -pnn, but what the hell.
-        $prepscript .= $patchopts if $patchopts;
-        $prepscript .= "-p0" if !$patchopts;
-        $prepscript .= " -s <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
+        $prepscript .= qq(echo "Patch #$patchnum ($pkgdata{main}{"patch$patchnum"}):"\n);
+	# If there are options passed, use'em.
+	# Otherwise, catch a bare %patch and ASS-U-ME it's '-p0'-able.
+	# Will break on options that don't provide -pnn, but what the hell.
+	# Need to decompress .bz2 and .gz patches on the fly.  Not sure why one
+	# would ever have such things, but there they are...  and rpmbuild supports 'em
+	# patch originally suggested by Lucian Cristian for .bz2
+	# reworked and expanded to support .Z/.gz as well
+	if ( $pkgdata{main}{"patch$patchnum"} =~ /\.(?:Z|gz|bz2)$/ ) {
+	  my $decompressor;
+	  $decompressor = 'gzip' if $pkgdata{main}{"patch$patchnum"} =~ /\.(?:Z|gz)$/;
+	  $decompressor = 'bzip2' if $pkgdata{main}{"patch$patchnum"} =~ /\.bz2$/;
+	  $prepscript .= qq(/bin/$decompressor -d < $topdir/SOURCES/$pkgdata{main}{"patch$patchnum"} | patch );
+	  $prepscript .= $patchopts if $patchopts;
+	  $prepscript .= "-p0" if !$patchopts;
+	  $prepscript .= qq( -s\nSTATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+	} else {
+	  $prepscript .= "patch ";
+	  $prepscript .= $patchopts if $patchopts;
+	  $prepscript .= "-p0" if !$patchopts;
+	  $prepscript .= " -s <$topdir/SOURCES/".$pkgdata{main}{"patch$patchnum"}."\n";
+	}
       } else {
         $prepscript .= expandmacros($_,'gp');
       }
