@@ -1415,17 +1415,22 @@ sub checkbuildreq {
 
     my @pkglist = qx { dpkg-query --showformat '\${status}\t\${version}\n' -W $pkg };
 # need to check if no lines returned - means a bad buildreq
-    my ($reqstat,undef,undef,$reqver) = split /\s+/, $pkglist[0];
-    if ($reqstat !~ /install/) {
+    if (!$pkglist[0]) {
       print " * Missing build-dependency $pkg!\n";
       $reqflag = 0;
     } else {
-      my ($resp) = qx { dpkg --compare-versions $reqver '$rel' $ver && echo "ok" };
-      if ($resp !~ /^ok/) {
+      my ($reqstat,undef,undef,$reqver) = split /\s+/, $pkglist[0];
+      if ($reqstat !~ /install/) {
+	print " * Missing build-dependency $pkg!\n";
 	$reqflag = 0;
-	print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n"
-      }
-    } # end not installed/installed check
+      } else {
+	my ($resp) = qx { dpkg --compare-versions $reqver '$rel' $ver && echo "ok" };
+	if ($resp !~ /^ok/) {
+	  $reqflag = 0;
+	  print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n"
+        }
+      } # end not installed/installed check
+    }
   } # end req loop
 
   return $reqflag;
