@@ -968,7 +968,7 @@ sub prep {
   # create script filename
   my $prepscriptfile = "$tmpdir/deb-tmp.prep.".int(rand(99998)+1);
   sysopen(PREPSCRIPT, $prepscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
-	or die $!;
+	or die "Can't open/create prep script file $prepscriptfile: $!\n";
   print PREPSCRIPT $scriptletbase;
   print PREPSCRIPT $prepscript;
   close PREPSCRIPT;
@@ -992,7 +992,7 @@ sub build {
   # create script filename
   my $buildscriptfile = "$tmpdir/deb-tmp.build.".int(rand(99998)+1);
   sysopen(BUILDSCRIPT, $buildscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
-	or die $!;
+	or die "Can't open/create build script file $buildscriptfile: $!\n";
   print BUILDSCRIPT $scriptletbase;
   print BUILDSCRIPT $buildscript;
   close BUILDSCRIPT;
@@ -1031,7 +1031,7 @@ sub install {
   # create script filename
   my $installscriptfile = "$tmpdir/deb-tmp.inst.".int(rand(99998)+1);
   sysopen(INSTSCRIPT, $installscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
-	or die $!;
+	or die "Can't open/create install script file $installscriptfile: $!\n";
   print INSTSCRIPT $scriptletbase;
   print INSTSCRIPT $installscript;
   close INSTSCRIPT;
@@ -1217,7 +1217,7 @@ sub binpackage {
     # create script filename
     my $debscriptfile = "$tmpdir/deb-tmp.pkg.".int(rand(99998)+1);
     sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
-	or die $!;
+	or die "Can't open/create package-creation script file $debscriptfile: $!\n";
     print DEBSCRIPT $scriptletbase;
     print DEBSCRIPT "fakeroot dpkg-deb -b $specglobals{buildroot}/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
 	"$pkgdata{$pkg}{name}_".
