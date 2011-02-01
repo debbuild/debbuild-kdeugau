@@ -1719,7 +1719,8 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 14;
 
 # should probably stick a "no runaway" flag in here...  Just In Case...
     # %define's
-    while (my ($key) = ($macrostring =~ /%{([a-z0-9]+)}/i) ) {
+# note to self: find out valid chars for %define name/label so we can parse them
+    while (my ($key) = ($macrostring =~ /%{([a-z0-9_]+)}/i) ) {
 # hrm.  This needs thinking.
 #die "A horrible death!  \%{$key}, '$macrostring'\n" if !$specglobals{$key};
       $macrostring =~ s|%{$key}|$specglobals{$key}|g;
