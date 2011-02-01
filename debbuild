@@ -1717,6 +1717,12 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 14;
     $macrostring =~ s|%{optflags}|$optflags{$hostarch}|g;
     $macrostring =~ s|%{_vendor}|$specglobals{'_vendor'}|g;
 
+    # system programs.  RPM uses a global config file for these;  we'll just
+    # ASS-U-ME and make life a little simpler.
+    if ($macrostring =~ /\%\{\_\_([a-z0-9_-]+)\}/) {
+      $macrostring =~ s|%{__([a-z0-9_-]+)}|$1|g;
+    }
+
 # should probably stick a "no runaway" flag in here...  Just In Case...
     # %define's
 # note to self: find out valid chars for %define name/label so we can parse them
@@ -1725,12 +1731,6 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 14;
 #die "A horrible death!  \%{$key}, '$macrostring'\n" if !$specglobals{$key};
       $macrostring =~ s|%{$key}|$specglobals{$key}|g;
 		# wanna limit this to "... if $specglobals{$key}", but need more magic
-    }
-
-    # system programs.  RPM uses a global config file for these;  we'll just
-    # ASS-U-ME and make life a little simpler.
-    if ($macrostring =~ /\%\{\_\_([a-z0-9_-]+)\}/) {
-      $macrostring =~ s|%{__([a-z0-9_-]+)}|$1|g;
     }
 
     # Perl @INC/...lib locations, and other related bits.
