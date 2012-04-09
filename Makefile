@@ -29,4 +29,4 @@ dist:
 	tar cvf $(PKGNAME)-$(VERSION).tar $(PKGNAME)-$(VERSION)
 	gzip -v -f -9 $(PKGNAME)-$(VERSION).tar
 	rm -rf $(PKGNAME)-$(VERSION)
-	gpg --detach-sign $(PKGNAME)-$(VERSION).tar.gz
+	gpg -a --detach-sign $(PKGNAME)-$(VERSION).tar.gz
