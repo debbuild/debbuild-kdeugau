@@ -9,7 +9,7 @@
 # SVN revision $Rev$
 # Last update by $Author$
 ###
-# Copyright (C) 2005-2011 Kris Deugau <kdeugau@deepnet.cx>
+# Copyright (C) 2005-2012 Kris Deugau <kdeugau@deepnet.cx>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -31,9 +31,12 @@ use Fcntl;	# for sysopen flags
 use Cwd 'abs_path';	# for finding where files really are
 use Config;
 
+my $version = "0.9";	#VERSION#
+
 # regex debugger
 #use re "debug";
 
+# Behavioural compatibility FTW!  Yes, rpmbuild does this too.
 die "No .spec file to work with!  Exiting.\n" if scalar(@ARGV) == 0;
 
 # Program flow:
@@ -123,7 +126,7 @@ q(
 
 # Hackery to try to bring some semblance of sanity to packages built for more
 # than one Debian version at the same time.  Whee.
-# /etc/debian-version
+# /etc/debian-version and/or version of base-files package
 my %distmap = (
 	"3.1.9ubuntu7.1"	=> "dapper",
 	"4ubuntu2"	=> "feisty",
@@ -355,6 +358,9 @@ sub parse_cmd {
   #use Getopt::Popt qw(:all);
   # Or not.  >:(  Stupid Debian lack of findable Perl module names in packages.
 
+  # ... also note, single-character options are mostly not flags, so they can't be
+  # sanely combined the way most other programs' single-character flag options can.
+
   # Stuff it.
   my $prevopt = '';
   foreach (@ARGV) {
@@ -371,6 +377,41 @@ sub parse_cmd {
 	  $cmdopts{type} = 's';
 	} elsif (/^--showpkgs/) {
 	  $cmdopts{type} = 'd';	# d for 'diagnostic' or 'debug' or 'dump'
+	} elsif (/^--help/) {
+	  print "debbuild v$version".q{
+Copyright 2005-2012 Kris Deugau <kdeugau@deepnet.cx>
+
+Build .deb packages from RPM-style .spec files
+debbuild supports most package-building options rpmbuild does.
+
+Build options with [ <specfile> | <tarball> | <source package> ]:
+      -bp                        build through %prep (unpack sources and apply patches) from <specfile>
+      -bc                        build through %build (%prep, then compile) from <specfile>
+      -bi                        build through %install (%prep, %build, then install) from <specfile>
+      -bl                        verify %files section from <specfile>
+      -ba                        build source and binary packages from <specfile>
+      -bb                        build binary package only from <specfile>
+      -bs                        build source package only from <specfile>
+      -tp                        build through %prep (unpack sources and apply patches) from <tarball>
+      -tc                        build through %build (%prep, then compile) from <tarball>
+      -ti                        build through %install (%prep, %build, then install) from <tarball>
+      -ta                        build source and binary packages from <tarball>
+      -tb                        build binary package only from <tarball>
+      -ts                        build source package only from <tarball>
+      --rebuild                  build binary package from <source package>
+      --buildroot=DIRECTORY      override build root
+      --short-circuit            skip straight to specified stage (only for c,i)
+
+Common options:
+  -D, --define='MACRO EXPR'      define MACRO with value EXPR
+
+debbuild-specific options:
+      -i                         Unpack a .sdeb in the %_topdir tree
+      --showpkgs                 Show package names that would be built.  Only works with .spec files.
+
+};
+	  exit;
+
 	} elsif (/^--define/) {
 	  # nothing to do?  Can't see anything needed, we handle the actual definition later.
 ##fixme
@@ -395,6 +436,8 @@ sub parse_cmd {
 	} elsif (/^-i/) {
 	  $cmdopts{install} = 1;
 	  $prevopt = '-i';
+	} elsif (/^-D/) {
+	  # --define.  nothing to do on this round;  actual work is done next time.
 	} else {
 	  die "Bad option $_\n";
 	}
@@ -408,7 +451,7 @@ sub parse_cmd {
       # on which one we meet.
       if ($prevopt eq '--buildroot') {
 	$cmdbuildroot = $_;
-      } elsif ($prevopt eq '--define') {
+      } elsif ($prevopt eq '--define' || $prevopt eq '-D') {
 	my ($macro,$value) = (/([a-z0-9_.-]+)(?:\s+(.+))?/i);
 	if ($value ne '') {
 	  $specglobals{$macro} = $value;
