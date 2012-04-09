@@ -1242,6 +1242,9 @@ sub binpackage {
 	( defined($pkgdata{$pkg}{enhances}) ? "Enhances: $pkgdata{$pkg}{enhances}\n" : '' ).
 	( defined($pkgdata{$pkg}{replaces}) ? "Replaces: $pkgdata{$pkg}{replaces}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
+    # Munge things so that Debian tools don't choke on errant blank lines
+    $pkgdata{$pkg}{desc} =~ s/\s+$//g;		# Trim trailing blanks
+    $pkgdata{$pkg}{desc} =~ s/^ $/ ./mg;	# Replace lines consisting of " \n" with " .\n"
     $control .= "$pkgdata{$pkg}{desc}\n";
 
     open CONTROL, ">$specglobals{buildroot}/$pkg/DEBIAN/control";

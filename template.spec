@@ -48,7 +48,9 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 %description
 Multi-line
+
 description
+
 
 %prep
 # Steps to unpack and patch source as needed
