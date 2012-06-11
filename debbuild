@@ -1557,7 +1557,7 @@ sub getreqs() {
 
   if ($reqlibs ne '') {
     foreach (qx { dpkg -S $reqlibs }) {
-      my ($libpkg,undef) = split /:\s+/;
+      my ($libpkg,undef) = split /:/;
       $reqs{$libpkg} = 1;
     }
   }
