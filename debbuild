@@ -1266,7 +1266,7 @@ sub binpackage {
     sysopen(DEBSCRIPT, $debscriptfile, O_RDWR | O_CREAT | O_EXCL | O_NOFOLLOW)
 	or die "Can't open/create package-creation script file $debscriptfile: $!\n";
     print DEBSCRIPT $scriptletbase;
-    print DEBSCRIPT "fakeroot dpkg-deb -b $specglobals{buildroot}/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
+    print DEBSCRIPT "fakeroot -- dpkg-deb -b $specglobals{buildroot}/$pkg $topdir/DEBS/$pkgdata{$pkg}{arch}/".
 	"$pkgdata{$pkg}{name}_".
 	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
 	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}_$pkgdata{$pkg}{arch}.deb\n";
@@ -1520,7 +1520,7 @@ sub getreqs() {
 
   my @reqlist;
   foreach (@binlist) {
-    push @reqlist, qx { ldd $_ };
+    push @reqlist, qx { LANG=C ldd $_ };
   }
 
   # Get the list of libs provided by this package.  Still doesn't
