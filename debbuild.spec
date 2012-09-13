@@ -48,9 +48,9 @@ Version: #VERSION#
 Release: %{release}
 Source: http://www.deepnet.cx/debbuild/debbuild-%{version}.tar.gz
 Group: Development/Tools
-License: GPLv2
+License: GPLv2+
 Packager: Kris Deugau <kdeugau@deepnet.cx>
-Requires: perl, build-essential, pax, fakeroot
+Requires: perl, build-essential, pax, fakeroot, bash
 %if %{_vendor} == "debbuild"
 Recommends: patch, bzip2
 Suggests: rpm, subversion

@@ -95,7 +95,7 @@ my %optflags = ( 'i386'	=>	'-O2 -g -march=i386 -mcpu=i686',
 	);
 my $hostarch;	# we set this later...
 my $scriptletbase =
-q(#!/bin/sh
+q(#!/bin/bash
 
   RPM_SOURCE_DIR="%{_topdir}/SOURCES"
   RPM_BUILD_DIR="%{_topdir}/BUILD"
@@ -842,6 +842,8 @@ LINE: while (<SPECFILE>) {
       # Debian dpkg doesn't speak "%docdir".  Meh.
       next LINE if /^\%docdir/;
 #      my $singleton = 0;	# don't recall what this was for
+      next LINE if /^\s*#/;
+      next LINE if /^\s*$/;
 
 # create and initialize flags
       my ($perms, $owner, $group, $conf, $filesline);
@@ -979,7 +981,7 @@ LINE: while (<SPECFILE>) {
 	warn "Warning:  Debian-specific 'Suggests:' outside \%if wrapper\n" if $iflevel == 0;
       } elsif (/^enhances:\s*(.+)/i) {
         $pkgdata{main}{enhances} .= ", $1";
-	warn "Warning:  Debian-specific 'Enahnces:' outside \%if wrapper\n" if $iflevel == 0;
+	warn "Warning:  Debian-specific 'Enhances:' outside \%if wrapper\n" if $iflevel == 0;
       } elsif (/^replaces:\s*(.+)/i) {
         $pkgdata{main}{replaces} .= ", $1";
 	warn "Warning:  Debian-specific 'Replaces:' outside \%if wrapper\n" if $iflevel == 0;
@@ -1464,6 +1466,9 @@ sub checkbuildreq {
   my @reqlist = split /,\s+/, $buildreq;
 
   foreach my $req (@reqlist) {
+    # from rpmbuild error message
+    # Dependency tokens must begin with alpha-numeric, '_' or '/'
+##fixme:  check for suitable whitespace around $rel
     my ($pkg,$rel,$ver);
 
     # We have two classes of requirements - versioned and unversioned.
@@ -1478,21 +1483,34 @@ sub checkbuildreq {
     }
 
     my @pkglist = qx { dpkg-query --showformat '\${status}\t\${version}\n' -W $pkg };
-# need to check if no lines returned - means a bad buildreq
     if (!$pkglist[0]) {
       print " * Missing build-dependency $pkg!\n";
       $reqflag = 0;
     } else {
+# real package, installed
+#kdeugau:~$ dpkg-query --showformat '${status}\t${version}\n' -W libc-client2007e-dev 2>&1
+#install ok installed    8:2007f~dfsg-1
+# virtual package, provided by ???
+#kdeugau:~$ dpkg-query --showformat '${status}\t${version}\n' -W libc-client-dev 2>&1
+#unknown ok not-installed
+# real package or virtual package not installed or provided
+#kdeugau:~$ dpkg-query --showformat '${status}\t${version}\n' -W libdb4.8-dbg 2>&1
+#dpkg-query: no packages found matching libdb4.8-dbg
+
       my ($reqstat,undef,undef,$reqver) = split /\s+/, $pkglist[0];
-      if ($reqstat !~ /install/) {
-	print " * Missing build-dependency $pkg!\n";
-	$reqflag = 0;
-      } else {
+      if ($reqstat =~ /^unknown/) {
+	# this seems to be a virtual package.
+	print " * Warning: $pkg is probably installed but seems to be a virtual package.\n";
+      } elsif ($reqstat =~ /^install/) {
 	my ($resp) = qx { dpkg --compare-versions $reqver '$rel' $ver && echo "ok" };
 	if ($resp !~ /^ok/) {
 	  $reqflag = 0;
 	  print " * Buildreq $pkg is installed, but wrong version ($reqver):  Need $ver\n"
         }
+      } else {
+	# whatever state it's in, it's not completely installed, therefore it's missing.
+	print " * Missing build-dependency $pkg!\n";
+	$reqflag = 0;
       } # end not installed/installed check
     }
   } # end req loop
@@ -1542,7 +1560,7 @@ sub getreqs() {
     next if /linux-gate.so/;		# Kernel hackery for teh W1n!!1!1eleventy-one!1  (Don't ask.  Feh.)
     next if /linux-vdso.so/;		# More kernel hackery.  Whee!
 
-    my ($req) = (m|=\>\s+([a-z0-9._/-]+)|); # dig out the actual library (so)name.
+    my ($req) = (m|=\>\s+([a-zA-Z0-9._/+-]+)|); # dig out the actual library (so)name.
 	# And feh, we need the *path*, since I've discovered a new edge case where
 	# the same libnnn.1.2.3 *file*name is found across *several* lib dirs.  >:(
 
@@ -1708,6 +1726,7 @@ sub expandmacros {
   if ($section =~ /g/) {
 
     $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
+    $macrostring =~ s|%{buildsubdir}|$tarballdir|g;
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'%{_datadir}/doc'g;
