@@ -741,7 +741,11 @@ LINE: while (<SPECFILE>) {
           $buildarch = $dvalue;     # Emulate rpm's behaviour to a degree
           $dname = 'arch';
         }
-        $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'gp');
+        if ($dname =~ /recommends|suggests|enhances|replaces|requires|conflicts|provides/) {
+          $pkgdata{$subname}{$dname} .= ", ".expandmacros($dvalue, 'gp');
+        } else {
+          $pkgdata{$subname}{$dname} = expandmacros($dvalue, 'gp');
+        }
       }
     } # package
 
