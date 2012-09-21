@@ -77,7 +77,7 @@ my %cmdopts = (type => '',
 	);
 my $topdir = "/usr/src/debian";
 #my $specglobals{buildroot} = "%{_tmppath}/%{name}-%{version}-%{release}.root".int(rand(99998)+1);
-$specglobals{buildroot} = '';
+$specglobals{buildroot} = '%{_topdir}/BUILDROOT/%{name}-%{version}-%{release}';
 
 # "Constants"
 my %targets = ('p' => 'Prep',
@@ -284,6 +284,7 @@ if ($cmdopts{type} eq 't') {
 # -> srcpkg if -.s
 if ($cmdopts{stage} eq 's') {
   srcpackage();
+  print $finalmessages;
   exit 0;
 }
 
@@ -724,6 +725,7 @@ LINE: while (<SPECFILE>) {
 # now we handle individual lines from the various sections
 
     if ($stage eq 'desc') {
+      next LINE if /^\s*#/;
       $pkgdata{$subname}{desc} .= " $_";
     } # description
 
