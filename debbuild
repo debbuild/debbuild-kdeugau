@@ -178,7 +178,7 @@ my %distmap = (
 #	Source, URL, Packager, BuildRoot, Description, BuildRequires,
 #	Requires, Provides
 # 10/31/2005 Maybe this should be flatter?  -kgd
-my %pkgdata;
+my %pkgdata = (main => {source => ''});
 my @pkglist = ('main');	#sigh
 # Files listing.  Embedding this in %pkgdata would be, um, messy.
 my %filelist;
@@ -670,8 +670,6 @@ LINE: while (<SPECFILE>) {
 
     if (/^\%prep/) {
       $stage = 'prep';
-      # This really should be local-ish, but we need just the filename for the source
-      $pkgdata{main}{source} =~ s|.+/([^/]+)$|$1|;
       # Replace some core macros
       $pkgdata{main}{source} = expandmacros($pkgdata{main}{source},'gp');
       next LINE;
@@ -950,10 +948,14 @@ LINE: while (<SPECFILE>) {
         $specglobals{buildroot} = $1;
       } elsif (/^source0?:\s*(.+)/i) {
         $pkgdata{main}{source} = $1;
+        # Do this here since we don't use any URL forms elsewhere (maybe some other time)
+        $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$1|;
 	# .tar, .tar.gz, .tar.bz2, .tgz
         die "Unknown tarball format $1\n" if $1 !~ /\.(?:tar(?:\.(?:gz|bz2))?|tgz)$/;
-      } elsif (/^source([0-9]+):\s*(.+)/i) {
-        $pkgdata{sources}{$1} = $2;
+      } elsif (my ($srcnum, $src) = (/^source([0-9]+):\s*(.+)/i)) {
+        $pkgdata{sources}{$srcnum} = $src;
+        # Do this here since we don't use any URL forms elsewhere (maybe some other time)
+        $pkgdata{sources}{$srcnum} =~ s|^.+/([^/]+)$|$1|;
       } elsif (/^patch([^:]+):\s*(.+)$/i) {
         my $patchname = "patch$1";
         $pkgdata{main}{$patchname} = $2;
@@ -1397,9 +1399,8 @@ sub srcpackage {
   # use pax -w [file] [file] ... >outfile.sdeb
   $paxcmd = "cd $topdir; pax -w ";
 
-# tweak source entry into usable form.  Need it locally somewhere along the line.
-  (my $pkgsrc = $pkgdata{main}{source}) =~ s|.+/([^/]+)$|$1|;
-  $paxcmd .= "SOURCES/$pkgsrc ";
+  # some packages may not have a "main" source.
+  $paxcmd .= "SOURCES/$pkgdata{main}{source} " if $pkgdata{main}{source};
 
   # create file list:  Source[nn], Patch[nn]
   foreach my $specbit (keys %{$pkgdata{main}} ) {
