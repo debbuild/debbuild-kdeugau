@@ -135,7 +135,8 @@ my %distmap = (
 	"4"	=> "etch",
 	"5"	=> "lenny",
 	"6.0"	=> "squeeze",
-	"7.0"	=> "wheezy", 	#maybe?
+	"7.0"	=> "wheezy",
+	"8.0"	=> "jessie",
 	"99"	=> "sid");
 # Enh.  There doesn't seem to be any better way to do this...  :(
 {
@@ -1753,6 +1754,7 @@ sub expandmacros {
     $macrostring =~ s'%{_libdir}'/usr/lib'g;
     $macrostring =~ s'%{_sysconfdir}'/etc'g;
     $macrostring =~ s'%{_localstatedir}'/var'g;
+    $macrostring =~ s'%{_prefix}'/usr'g;
 
     # FHS-ish locations that aren't quite actually FHS-specified.
     $macrostring =~ s'%{_datadir}'/usr/share'g;
