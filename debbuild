@@ -1566,6 +1566,7 @@ sub getreqs() {
 
   my %reqs;
   my $reqlibs = '';
+  my %reqliblist;
 
   foreach (@reqlist) {
     next if /^$pkgtree/;
@@ -1573,6 +1574,13 @@ sub getreqs() {
     next if m|/lib(?:64)?/ld-linux|;	# Hack! Hack!  PTHBTT!  (libc suxx0rz)
     next if /linux-gate.so/;		# Kernel hackery for teh W1n!!1!1eleventy-one!1  (Don't ask.  Feh.)
     next if /linux-vdso.so/;		# More kernel hackery.  Whee!
+
+    # Whee!  more hackery to detect provided-here libs.  Some apparently return from ldd as "not found".
+    my ($a,$b) = split / => /;
+    $a =~ s/\s*//g;
+    if ($b =~ /not found/) {
+      next if qx { find $specglobals{buildroot} -name "*$a" };
+    }
 
     my ($req) = (m|=\>\s+([a-zA-Z0-9._/+-]+)|); # dig out the actual library (so)name.
 	# And feh, we need the *path*, since I've discovered a new edge case where
@@ -1585,11 +1593,13 @@ sub getreqs() {
     next if $provlist =~ /\b$req/;
 
     $reqlibs .= " $req";
+    $reqliblist{$req} = 1;
   }
 
-  if ($reqlibs ne '') {
-    foreach (qx { dpkg -S $reqlibs }) {
-      my ($libpkg,undef) = split /:/;
+  if (%reqliblist) {
+    foreach my $rlib (keys %reqliblist) {
+      my $libpkg = qx { dpkg -S $rlib };
+      ($libpkg,undef) = split /:/, $libpkg;
       $reqs{$libpkg} = 1;
     }
   }
