@@ -1291,10 +1291,9 @@ sub binpackage {
     close DEBSCRIPT;
 
     my $control = "Package: $pkgdata{$pkg}{name}\n".
-	"Version: ".
-	(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
+	"Version: ".(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
 	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
-	"Section: $pkgdata{$pkg}{group}\n".
+	"Section: ".($pkgdata{$pkg}{group} ? $pkgdata{$pkg}{group} : $pkgdata{main}{group})."\n".
 	"Priority: optional\n".
 	"Architecture: $pkgdata{$pkg}{arch}\n".
 	"Maintainer: $pkgdata{main}{packager}\n".
