@@ -9,7 +9,7 @@
 # SVN revision $Rev$
 # Last update by $Author$
 ###
-# Copyright (C) 2005-2012 Kris Deugau <kdeugau@deepnet.cx>
+# Copyright (C) 2005-2013 Kris Deugau <kdeugau@deepnet.cx>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ use Fcntl;	# for sysopen flags
 use Cwd 'abs_path';	# for finding where files really are
 use Config;
 
-my $version = "0.9";	#VERSION#
+my $version = "0.9.9";	#VERSION#
 
 # regex debugger
 #use re "debug";
