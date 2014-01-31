@@ -682,19 +682,19 @@ LINE: while (<SPECFILE>) {
 
     if (/^\%build/) {
       $stage = 'build';
-      $buildscript .= "cd $tarballdir\n";
+      $buildscript .= "cd $tarballdir\n" if $pkgdata{main}{hassetup};
       next LINE;
     } # %build
 
     if (/^\%install/) {
       $stage = 'install';
-      $installscript .= "cd $tarballdir\n";
+      $installscript .= "cd $tarballdir\n" if $pkgdata{main}{hassetup};
       next LINE;
     } # %install
 
     if (/^\%clean/) {
       $stage = 'clean';
-      $cleanscript .= "cd $tarballdir\n";
+      $cleanscript .= "cd $tarballdir\n" if $pkgdata{main}{hassetup};
       next LINE;
     } # %clean
 
@@ -758,6 +758,7 @@ LINE: while (<SPECFILE>) {
       # Actual handling for %prep section.  May have %setup macro;  may
       # include %patch tags, may be just a bare shell script.
       if (/^\%setup/) {
+        $pkgdata{main}{hassetup} = 1;  # flag the fact that we've got %setup
         # Parse out the %setup macro.  Note that we aren't supporting
         # many of RPM's %setup features.
         $prepscript .= "cd $topdir/BUILD\n";
@@ -1290,6 +1291,7 @@ sub binpackage {
       # %$&$%@#@@#%@@@ Debian and their horrible ugly package names.  >:(
     close DEBSCRIPT;
 
+    $pkgdata{$pkg}{summary} = expandmacros($pkgdata{$pkg}{summary}, 'gp');
     my $control = "Package: $pkgdata{$pkg}{name}\n".
 	"Version: ".(defined($pkgdata{main}{epoch}) ? "$pkgdata{main}{epoch}:" : '').
 	"$pkgdata{$pkg}{version}-$pkgdata{main}{release}\n".
@@ -1305,6 +1307,7 @@ sub binpackage {
 	( defined($pkgdata{$pkg}{enhances}) ? "Enhances: $pkgdata{$pkg}{enhances}\n" : '' ).
 	( defined($pkgdata{$pkg}{replaces}) ? "Replaces: $pkgdata{$pkg}{replaces}\n" : '' ).
 	"Description: $pkgdata{$pkg}{summary}\n";
+    $pkgdata{$pkg}{desc} = expandmacros($pkgdata{$pkg}{desc}, 'gp');
     # Munge things so that Debian tools don't choke on errant blank lines
     $pkgdata{$pkg}{desc} =~ s/\s+$//g;		# Trim trailing blanks
     $pkgdata{$pkg}{desc} =~ s/^ $/ ./mg;	# Replace lines consisting of " \n" with " .\n"
@@ -1465,6 +1468,9 @@ sub clean {
 # requirements are not met.
 sub checkbuildreq {
   return 1 if $buildreq eq '';	# No use doing extra work.
+
+  # expand macros 
+  $buildreq = expandmacros($buildreq,'gp');
 
   if ( ! -e "/usr/bin/dpkg-query" ) {
     print "**WARNING**  dpkg-query not found.  Can't check build-deps.\n".
