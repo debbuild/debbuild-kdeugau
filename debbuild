@@ -31,7 +31,7 @@ use Fcntl;	# for sysopen flags
 use Cwd 'abs_path';	# for finding where files really are
 use Config;
 
-my $version = "0.9.10";	#VERSION#
+my $version = "0.10.0";	#VERSION#
 
 # regex debugger
 #use re "debug";
@@ -109,19 +109,31 @@ q(#!/bin/bash
   RPM_PACKAGE_VERSION="%{version}"
   RPM_PACKAGE_RELEASE="%{release}"
   export RPM_PACKAGE_NAME RPM_PACKAGE_VERSION RPM_PACKAGE_RELEASE
+  LANG=C
+  export LANG
+  unset CDPATH DISPLAY ||:
   RPM_BUILD_ROOT="%{buildroot}"
   export RPM_BUILD_ROOT
+
+  PKG_CONFIG_PATH="${PKG_CONFIG_PATH}:/usr/lib64/pkgconfig:/usr/share/pkgconfig"
+  export PKG_CONFIG_PATH
 );
-foreach (`dpkg-architecture`) {
-  s/=(.+)/="$1"/;
-  $scriptletbase .= "  $_";
-  ($hostarch) = (/^DEB_HOST_ARCH="(.+)"$/) if /DEB_HOST_ARCH=/;
+
+if (-e '/usr/bin/dpkg-architecture') {
+  foreach (`dpkg-architecture`) {
+    s/=(.+)/="$1"/;
+    $scriptletbase .= "  $_";
+    ($hostarch) = (/^DEB_HOST_ARCH="(.+)"$/) if /DEB_HOST_ARCH=/;
+  }
+} else {
+  warn "Missing dpkg-architecture, DEB_HOST_ARCH will not be set!\n";
 }
+
 $scriptletbase .=
 q(
   set -x
   umask 022
-  cd %{_topdir}/BUILD
+  cd "%{_topdir}/BUILD"
 );
 
 # Hackery to try to bring some semblance of sanity to packages built for more
@@ -568,7 +580,7 @@ LINE: while (<SPECFILE>) {
     if (/^%[a-z]/ &&
 		$_ !~ /^%(?:attr|build|changelog|check|clean|config|configure|defattr|define|description|
 		dir|doc|docdir|else|endif|files|ghost|if|ifarch|ifn|ifnarch|ifnos|ifnxxx|fos|ifxxx|
-		install|makeinstall|package|patch\d+|post|postun|pre|prep|preun|readme|setup|
+		install|makeinstall|package|patch\d+|post|postun|pre|prep|preun|readme|setup[^\s]*|
 		triggerin|triggerpostun|triggerun|verify|verifyscript)\b/x
 	) {
 	my ($badtag) = (/^%([a-z]+)/i);
@@ -759,28 +771,109 @@ LINE: while (<SPECFILE>) {
       # include %patch tags, may be just a bare shell script.
       if (/^\%setup/) {
         $pkgdata{main}{hassetup} = 1;  # flag the fact that we've got %setup
-        # Parse out the %setup macro.  Note that we aren't supporting
-        # many of RPM's %setup features.
-        $prepscript .= "cd $topdir/BUILD\n";
-        if ( /\s+-n\s+([^\s]+)\s+/ ) {
-          $tarballdir = $1;
-        }
+        # Parse out the %setup macro.
+        chomp;
+        # rpmbuild doesn't complain about gibberish immediately following %setup, but we will
+        warn "Suspect \%setup tag '$_', continuing\n" if ! /^\%setup(?:\s|$)/;
+
+        # Prepare some flags
+        my $changedir = 0;
+        my $deldir = 1;
+        my $quietunpack = 0;
+        my $deftarball = 1;
+        my $snum = '';
+        my $sbefore;
+        my $safter;
+        my $altsource = 0;
+
+        my @sbits = split /\s+/;
+        shift @sbits;
+        while (my $sopt = shift @sbits) {
+          if ($sopt eq '-n') {
+            $tarballdir = shift @sbits;
+          } elsif ($sopt eq '-a') {
+            # shift, next opt must be numeric (which sourcenn:)
+            $sopt = shift @sbits;
+            die "Argument for \%setup -a must be numeric at $specfile line $.\n" if $sopt !~ /^\d+$/;
+            $safter = $sopt;
+            $snum = $sopt;
+            $altsource = 1;
+          } elsif ($sopt eq '-b') {
+            # shift, next opt must be numeric (which sourcenn:)
+            $sopt = shift @sbits;
+            die "Argument for \%setup -b must be numeric at $specfile line $.\n" if $sopt !~ /^\d+$/;
+            $sbefore = $sopt;
+            $snum = $sopt;
+            $altsource = 2;
+          } elsif ($sopt eq '-c') {
+            # flag, create and change directory before unpack
+            $changedir = 1;
+          } elsif ($sopt eq '-D') {
+            # flag, do not delete directory before unpack
+            $deldir = 0;
+          } elsif ($sopt eq '-T') {
+            # flag, do not unpack first source
+            $deftarball = 0;
+          } elsif ($sopt eq '-q') {
+            # SSSH!  Unpack quietly
+            $quietunpack = 1;
+          }
+        } # $sopt = shift @sbits
+
+# Note that this is an incomplete match to rpmbuild's full %setup expression.
+# Still known to do:
+# - Match implementation of -a and -b if both are specified.
+#   Looks to be "expand -a into $aftersource and expand -b into $beforesource inside the while()"
+#   instead of treating them as flags like the other arguments.
+# - -q appears to be somewhat positional
+
+        $prepscript .= "cd '$topdir/BUILD'\n";
         $tarballdir = expandmacros($tarballdir,'gp');
-        $prepscript .= "rm -rf $tarballdir\n";
-        if (/\s+-c\s+/) {
-          $prepscript .= "mkdir $tarballdir\ncd $tarballdir\n";
-        }
-        $prepscript .=
+        $prepscript .= "rm -rf '$tarballdir'\n" if $deldir;
+        $prepscript .= "/bin/mkdir -p $tarballdir\n" if $changedir;
+
+        if ($deftarball) {
+          $prepscript .=
 		( $pkgdata{main}{source} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
 		( $pkgdata{main}{source} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
 		( $pkgdata{main}{source} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
-		" -dc $topdir/SOURCES/$pkgdata{main}{source} | /bin/tar -".
-		( /\s+-q\s+/ ? '' : 'vv' )."xf -\n".
-		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n).
-		"cd $topdir/BUILD/$tarballdir\n".
-		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
-		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
-		qq(/bin/chmod -Rf a+rX,g-w,o-w .\n);
+		" -dc '$topdir/SOURCES/$pkgdata{main}{source}' | /bin/tar -x".
+		( $quietunpack ? '' : 'vv' )."f -\n".
+		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+        }
+
+        if ($altsource) {
+          if ($altsource == 1) { # -a
+            $prepscript .= "cd '$tarballdir'\n";
+            $prepscript .=
+		( $pkgdata{sources}{$snum} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
+		" -dc '$topdir/SOURCES/$pkgdata{sources}{$snum}' | /bin/tar -x".
+		( $quietunpack ? '' : 'vv' )."f -\n".
+		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+          } # $altsource == 1
+
+          if ($altsource == 2) { # -b
+            $prepscript .=
+		( $pkgdata{sources}{$snum} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
+		" -dc '$topdir/SOURCES/$pkgdata{sources}{$snum}' | /bin/tar -x".
+		( $quietunpack ? '' : 'vv' )."f -\n".
+		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+            $prepscript .= "cd '$tarballdir'\n";
+          } # $altsource == 2
+        } else {
+          $prepscript .= "cd '$tarballdir'\n" unless $changedir;
+        }
+
+# rpm doesn't seem to do the chowns any more
+#		qq([ `/usr/bin/id -u` = '0' ] && /bin/chown -Rhf root .\n).
+#		qq([ `/usr/bin/id -u` = '0' ] && /bin/chgrp -Rhf root .\n).
+        $prepscript .=
+		qq(/bin/chmod -Rf a+rX,u+w,g-w,o-w .\n);
+
       } elsif ( my ($patchnum,$patchopts) = (/^\%patch([^\s]+)(\s+.+)?$/) ) {
         chomp $patchnum;
         $prepscript .= qq(echo "Patch #$patchnum ($pkgdata{main}{"patch$patchnum"}):"\n);
@@ -958,10 +1051,11 @@ LINE: while (<SPECFILE>) {
         $pkgdata{main}{packager} = $1;
       } elsif (/^buildroot:\s*(.+)/i) {
         $specglobals{buildroot} = $1;
-      } elsif (/^source0?:\s*(.+)/i) {
-        $pkgdata{main}{source} = $1;
+      } elsif (my ($sval) = /^source0?:\s*(.+)/i) {
+        $pkgdata{main}{source} = $sval;
         # Do this here since we don't use any URL forms elsewhere (maybe some other time)
-        $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$1|;
+        $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$sval|;
+        $pkgdata{sources}{0} = $pkgdata{main}{source};
 	# .tar, .tar.gz, .tar.bz2, .tgz, .xz
         die "Unknown tarball format $1\n" if $1 !~ /\.(?:tar(?:\.(?:gz|bz2|xz))?|tgz)$/;
       } elsif (my ($srcnum, $src) = (/^source([0-9]+):\s*(.+)/i)) {
