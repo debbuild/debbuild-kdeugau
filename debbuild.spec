@@ -28,6 +28,9 @@ if "%{debdist}" == "squeeze"
 if "%{debdist}" == "wheezy"
 %define errata 5
 %endif
+if "%{debdist}" == "jessie"
+%define errata 6
+%endif
 %if %{?relnum:0}%{?!relnum:1}
 %define relnum 1
 %endif
