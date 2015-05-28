@@ -31,7 +31,7 @@ use Fcntl;	# for sysopen flags
 use Cwd 'abs_path';	# for finding where files really are
 use Config;
 
-my $version = "0.9.9";	#VERSION#
+my $version = "0.9.10";	#VERSION#
 
 # regex debugger
 #use re "debug";
@@ -1484,6 +1484,7 @@ sub checkbuildreq {
   $buildreq =~ s/^, //;	# Strip the leading comma and space
   my @reqlist = split /,\s+/, $buildreq;
 
+  my @missinglist;
   foreach my $req (@reqlist) {
     # from rpmbuild error message
     # Dependency tokens must begin with alpha-numeric, '_' or '/'
@@ -1501,10 +1502,17 @@ sub checkbuildreq {
       $ver = 0;
     }
 
+## Apparently a package that has been installed, then uninstalled, has a "known" dpkg status of
+## "unknown ok not-installed" vs a package that has never been installed which returns nothing.  O_o
+## Virtual packages, of course, *also* show as "not installed" like this (WTF?)
+## This causes real packages to be misdetected as installed "possible virtual packages" instead of "missing
+## packages".  I don't think there's really a solution until/unless Debian's tools properly register virtual
+## packages as installed.
     my @pkglist = qx { dpkg-query --showformat '\${status}\t\${version}\n' -W $pkg };
     if (!$pkglist[0]) {
-      print " * Missing build-dependency $pkg!\n";
+      print " * Missing build-dependency $pkg!\n  $pkglist[0]";
       $reqflag = 0;
+      push @missinglist, $pkg;
     } else {
 # real package, installed
 #kdeugau:~$ dpkg-query --showformat '${status}\t${version}\n' -W libc-client2007e-dev 2>&1
@@ -1528,11 +1536,14 @@ sub checkbuildreq {
         }
       } else {
 	# whatever state it's in, it's not completely installed, therefore it's missing.
-	print " * Missing build-dependency $pkg!\n";
+	print " * Missing build-dependency $pkg!\n  $pkglist[0]";
 	$reqflag = 0;
+        push @missinglist, $pkg;
       } # end not installed/installed check
     }
   } # end req loop
+
+  print "To install all missing dependencies, run 'apt-get install ".join(' ', @missinglist)."'.\n" unless $reqflag;
 
   return $reqflag;
 } # end checkbuildreq()
@@ -1755,7 +1766,8 @@ sub expandmacros {
   if ($section =~ /g/) {
 
     $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
-    $macrostring =~ s|%{buildsubdir}|$tarballdir|g;
+# no longer a valid macro/tag
+#    $macrostring =~ s|%{buildsubdir}|$tarballdir|g;
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'%{_datadir}/doc'g;
