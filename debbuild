@@ -1978,6 +1978,8 @@ debbuild - Build Debian-compatible .deb packages from RPM .spec files
 
  debbuild --showpkgs
 
+ debbuild -i foo.sdeb
+
 =head1 DESCRIPTION
 
 debbuild attempts to build Debian-friendly semi-native packages from RPM spec files, 
@@ -2006,6 +2008,11 @@ you'll have to make heavy modifications anyway.
 
 If you see something you don't like, mail me.  Send a patch if you feel inspired.  I don't 
 promise I'll do anything other than say "Yup, that's broken" or "Got your message".
+
+The source package container I invented for debbuild, the .sdeb file, can be "installed"
+with debbuild -i exactly the same way as a .src.rpm can be installed with "rpm -i".  Both
+will unpack the file and place the source(s) and .spec file in the appropriate places in
+%_topdir/SOURCES and %_topdir/SPECS respectively.
 
 =head1 ASSUMPTIONS
 
