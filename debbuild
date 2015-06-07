@@ -1520,6 +1520,9 @@ sub srcpackage {
   }
 
   foreach my $source (keys %{$pkgdata{sources}}) {
+    # Skip Source0, since it's also $pkgdata{main}{source}.  Could arguably
+    # just remove that instead, but I think that might backfire.
+    next if $source eq '0';
     $paxcmd .= "SOURCES/$pkgdata{sources}{$source} ";
   }
 
