@@ -1052,13 +1052,15 @@ LINE: while (<SPECFILE>) {
       } elsif (/^buildroot:\s*(.+)/i) {
         $specglobals{buildroot} = $1;
       } elsif (my ($sval) = /^source0?:\s*(.+)/i) {
+        $sval =~ s/\s*$//;
         $pkgdata{main}{source} = $sval;
         # Do this here since we don't use any URL forms elsewhere (maybe some other time)
-        $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$sval|;
+        $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$1|;
         $pkgdata{sources}{0} = $pkgdata{main}{source};
 	# .tar, .tar.gz, .tar.bz2, .tgz, .xz
-        die "Unknown tarball format $1\n" if $1 !~ /\.(?:tar(?:\.(?:gz|bz2|xz))?|tgz)$/;
+        die "Unknown Source: header format $sval\n" if $sval !~ /\.(?:tar(?:\.(?:gz|bz2|xz))?|tgz)$/;
       } elsif (my ($srcnum, $src) = (/^source([0-9]+):\s*(.+)/i)) {
+        $src =~ s/\s*$//;
         $pkgdata{sources}{$srcnum} = $src;
         # Do this here since we don't use any URL forms elsewhere (maybe some other time)
         $pkgdata{sources}{$srcnum} =~ s|^.+/([^/]+)$|$1|;
