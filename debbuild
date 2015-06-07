@@ -1255,17 +1255,19 @@ sub binpackage {
       mkdir "$topdir/DEBS/$pkgdata{$pkg}{arch}";
     }
 
-    # Skip building a package if it doesn't actually have any files.  NB:  This
-    # differs slightly from rpm's behaviour where a package *will* be built -
-    # even without any files - if %files is specified anywhere.  I can think
-    # of odd corner cases where that *may* be desireable.
-    next if (!$filelist{$pkg} or $filelist{$pkg} =~ /^\s*$/);
+    # Skip building a package that doesn't have any files or dependencies.  True
+    # metapackages don't have any files, but they depend on a bunch of things.
+    # Packages with neither have, essentially, no content.
+    next if 
+        (!$filelist{$pkg} or $filelist{$pkg} =~ /^\s*$/) &&
+        (!$pkgdata{$pkg}{requires});
+    $filelist{$pkg} = '' if !$filelist{$pkg};
 
     # Gotta do this first, otherwise we don't have a place to move files from %files
     mkdir "$specglobals{buildroot}/$pkg";
 
     # Eliminate any lingering % macros
-    $filelist{$pkg} = expandmacros $filelist{$pkg}, 'g';
+    $filelist{$pkg} = expandmacros $filelist{$pkg}, 'gp';
 
     my @pkgfilelist = split ' ', $filelist{$pkg};
     foreach my $pkgfile (@pkgfilelist) {
@@ -1930,6 +1932,7 @@ die "excessive recursive macro replacement;  dying.\n" if $tmpcount > 14;
     # system programs.  RPM uses a global config file for these;  we'll just
     # ASS-U-ME and make life a little simpler.
     if ($macrostring =~ /\%\{\_\_([a-z0-9_-]+)\}/) {
+# see /usr/lib/rpm/macros for most of the list.  we should arguably just parse that file, but..  ow.
       $macrostring =~ s|%{__([a-z0-9_-]+)}|$1|g;
     }
 
