@@ -1093,15 +1093,22 @@ LINE: while (<SPECFILE>) {
       } elsif (/^recommends:\s*(.+)/i) {
         $pkgdata{main}{recommends} .= ", $1";
 	warn "Warning:  Debian-specific 'Recommends:' outside \%if wrapper\n" if $iflevel == 0;
+# As of sometime between RHEL 6 and RHEL 7 or so, support was added for Recommends: and Enhances:,
+# along with shiny new tag Supplements:.  We'll continue to warn about them for a while.
       } elsif (/^suggests:\s*(.+)/i) {
         $pkgdata{main}{suggests} .= ", $1";
-	warn "Warning:  Debian-specific 'Suggests:' outside \%if wrapper\n" if $iflevel == 0;
+	warn "Warning:  'Suggests:' outside \%if wrapper\n" if $iflevel == 0;
       } elsif (/^enhances:\s*(.+)/i) {
         $pkgdata{main}{enhances} .= ", $1";
-	warn "Warning:  Debian-specific 'Enhances:' outside \%if wrapper\n" if $iflevel == 0;
+	warn "Warning:  'Enhances:' outside \%if wrapper\n" if $iflevel == 0;
+      } elsif (/^supplements:\s*(.+)/i) {
+        $pkgdata{main}{enhances} .= ", $1";
+        warn "Warning:  'Supplements:' is not natively supported by .deb packages.  Downgrading relationship to Enhances:.\n";
       } elsif (/^replaces:\s*(.+)/i) {
         $pkgdata{main}{replaces} .= ", $1";
-	warn "Warning:  Debian-specific 'Replaces:' outside \%if wrapper\n" if $iflevel == 0;
+	warn "Warning:  'Replaces:' outside \%if wrapper\n" if $iflevel == 0;
+      } elsif (/^obsoletes:\s*(.+)/i) {
+        $pkgdata{main}{replaces} .= ", $1";
       } elsif (/^autoreq(?:prov)?:\s*(.+)/i) {
 	# we don't handle auto-provides (yet)
 	$NoAutoReq = 1 if $1 =~ /(?:no|0)/i;
