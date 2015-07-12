@@ -66,6 +66,7 @@ my $tarballdir = '%{name}-%{version}';	# We do this in case of a spec file not u
 my %specglobals;	# For %define's in specfile, among other things.
 
 $specglobals{'_vendor'} = 'debbuild';
+# this can be changed by the Vendor: header in the spec file
 $specglobals{'vendor'} = 'debbuild';
 
 # Initialized globals
@@ -786,7 +787,7 @@ LINE: while (<SPECFILE>) {
         my $safter;
         my $altsource = 0;
 
-        # yes, really.  It's not clear how this cascades down to %build or %install, but evidence suggests ?
+        # yes, really.  It's not clear how this cascades down to %build or %install
         my $thistarballdir = $tarballdir;
 
         my @sbits = split /\s+/;
@@ -1051,6 +1052,8 @@ LINE: while (<SPECFILE>) {
         $pkgdata{main}{url} = $1;
       } elsif (/^packager:\s*(.+)/i) {
         $pkgdata{main}{packager} = $1;
+      } elsif (/^vendor:\s*(.+)/i) {
+        $specglobals{vendor} = $1;
       } elsif (/^buildroot:\s*(.+)/i) {
         $specglobals{buildroot} = $1;
       } elsif (my ($sval) = /^source0?:\s*(.+)/i) {
