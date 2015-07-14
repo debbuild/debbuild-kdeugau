@@ -49,7 +49,7 @@ Summary: Build Debian-compatible .deb packages from RPM .spec files
 Name: debbuild
 Version: #VERSION#
 Release: %{release}
-Source: http://www.deepnet.cx/debbuild/debbuild-%{version}.tar.gz
+Source: https://secure.deepnet.cx/releases/debbuild/debbuild-%{version}.tar.gz
 Group: Development/Tools
 License: GPLv2+
 Packager: Kris Deugau <kdeugau@deepnet.cx>
