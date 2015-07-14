@@ -9,7 +9,7 @@
 # SVN revision $Rev$
 # Last update by $Author$
 ###
-# Copyright (C) 2005-2013 Kris Deugau <kdeugau@deepnet.cx>
+# Copyright (C) 2005-2015 Kris Deugau <kdeugau@deepnet.cx>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -288,7 +288,8 @@ my $prepscript = '';
 my $buildscript = '';
 # %install doesn't need the full treatment from %clean;  just an empty place to install to.
 # NB - rpm doesn't do this;  is it really necessary?
-my $installscript = '[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT'."\n";
+my $installscript = '';
+#'[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT'."\n";
 my $cleanscript = '';
 
 # Snag some environment data
@@ -482,7 +483,7 @@ sub parse_cmd {
 	  $cmdopts{type} = 'd';	# d for 'diagnostic' or 'debug' or 'dump'
 	} elsif (/^--help/) {
 	  print "debbuild v$version".q{
-Copyright 2005-2012 Kris Deugau <kdeugau@deepnet.cx>
+Copyright 2005-2015 Kris Deugau <kdeugau@deepnet.cx>
 
 Build .deb packages from RPM-style .spec files
 debbuild supports most package-building options rpmbuild does.
@@ -2004,8 +2005,12 @@ sub expandmacros {
     while ($macrostring =~ m/\%\{([?!]+)([a-z0-9_.-]+)(?:\:([a-z0-9_.\/\-\\]+)?)?\}/g) {       #Whew....
       my $qex = $1;
       my $macro = $2;
-      my $value = (defined($3) ? $3 : '');
-
+      my $value = '';
+      if (defined($3)) {
+        $value = $3;
+      } else {
+        $value = $specglobals{$macro} if $specglobals{$macro};
+      }
       my $neg = '1' if $qex =~ /\!/;
       if ($specglobals{$macro}) {
 	$value = '' if $neg;
