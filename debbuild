@@ -31,7 +31,7 @@ use Fcntl;	# for sysopen flags
 use Cwd 'abs_path';	# for finding where files really are
 use Config;
 
-my $version = "0.11.0";	#VERSION#
+my $version = "0.11.1";	#VERSION#
 
 # regex debugger
 #use re "debug";
@@ -674,7 +674,7 @@ LINE: while (<SPECFILE>) {
     }
 
 # preprocess %define's
-    if (my ($key, $def) = (/^\%define\s+([^\s]+)\s+(.+)$/) ) {
+    if (my ($key, $def) = (/^\%(?:define|global)\s+([^\s]+)\s+(.+)$/) ) {
       $specglobals{$key} = expandmacros($def,'g');
     }
 
