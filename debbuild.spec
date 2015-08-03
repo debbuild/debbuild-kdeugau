@@ -17,7 +17,7 @@ License: GPLv2+
 Packager: Kris Deugau <kdeugau@deepnet.cx>
 Requires: perl, build-essential, pax, fakeroot, bash
 %if %{_vendor} == "debbuild"
-Recommends: patch, bzip2
+Recommends: patch, bzip2, xz-utils
 # For setting DEB_HOST_ARCH
 Recommends: dpkg-architecture
 Suggests: rpm, subversion
