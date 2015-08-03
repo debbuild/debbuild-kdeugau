@@ -362,6 +362,7 @@ if ($cmdopts{type} eq 'b') {
 
 if ($cmdopts{type} eq 't') {
   # Need to unpack the tarball to find the spec file.  Sort of the inverse of -b above.
+  # Note that rpmbuild doesn't seem to support this operation from a .zip file, so neither will we.
   # zcat $tarball |tar -t |grep .spec
   # collect some info about the tarball
   $specfile = "$topdir/BUILD/". qx { zcat $tarball |tar -t |grep -e '[\.]spec\$' };
@@ -912,7 +913,10 @@ LINE: while (<SPECFILE>) {
 # - Match implementation of -a and -b if both are specified.
 #   Looks to be "expand -a into $aftersource and expand -b into $beforesource inside the while()"
 #   instead of treating them as flags like the other arguments.
+# Known differences
 # - -q appears to be somewhat positional
+# - rpmbuild requires -n on all %setup macros, but carries the first down to %install etc,
+#   debbuild sets the global on the first call, and keeps using it for further %setup calls
 
         $prepscript .= "cd '$topdir/BUILD'\n";
         $tarballdir = expandmacros($tarballdir,'gp');
@@ -921,35 +925,56 @@ LINE: while (<SPECFILE>) {
 
         if ($deftarball) {
           $prepscript .= "cd '$tarballdir'\n" if $changedir;
-          $prepscript .=
+          if ($pkgdata{main}{source} =~ /\.zip$/) {
+            # .zip files are not really tarballs
+            $prepscript .= "/usr/bin/unzip".
+		( $quietunpack ? ' -qq ' : ' ' ).
+		"'$topdir/SOURCES/$pkgdata{main}{source}'";
+          } else {
+            $prepscript .=
 		( $pkgdata{main}{source} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
 		( $pkgdata{main}{source} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
 		( $pkgdata{main}{source} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
 		" -dc '$topdir/SOURCES/$pkgdata{main}{source}' | /bin/tar -x".
-		( $quietunpack ? '' : 'vv' )."f -\n".
-		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+		( $quietunpack ? '' : 'vv' )."f - ";
+          }
+          $prepscript .= qq(\nSTATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
         }
 
         if ($altsource) {
           if ($altsource == 1) { # -a
             $prepscript .= "cd '$tarballdir'\n";
-            $prepscript .=
+            if ($pkgdata{sources}{$snum} =~ /\.zip$/) {
+              # .zip files are not really tarballs
+              $prepscript .= "/usr/bin/unzip".
+		( $quietunpack ? ' -qq ' : ' ' ).
+		"'$topdir/SOURCES/$pkgdata{sources}{$snum}'";
+            } else {
+              $prepscript .=
 		( $pkgdata{sources}{$snum} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
 		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
 		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
 		" -dc '$topdir/SOURCES/$pkgdata{sources}{$snum}' | /bin/tar -x".
-		( $quietunpack ? '' : 'vv' )."f -\n".
-		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+		( $quietunpack ? '' : 'vv' )."f -";
+            }
+            $prepscript .= qq(\nSTATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
           } # $altsource == 1
 
           if ($altsource == 2) { # -b
-            $prepscript .=
+            if ($pkgdata{sources}{$snum} =~ /\.zip$/) {
+              # .zip files are not really tarballs
+              $prepscript .= "/usr/bin/unzip".
+		( $quietunpack ? ' -qq ' : ' ' ).
+		"'$topdir/SOURCES/$pkgdata{main}{source}'";
+            } else {
+              $prepscript .=
 		( $pkgdata{sources}{$snum} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
 		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
 		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
 		" -dc '$topdir/SOURCES/$pkgdata{sources}{$snum}' | /bin/tar -x".
-		( $quietunpack ? '' : 'vv' )."f -\n".
-		qq(STATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
+		( $quietunpack ? '' : 'vv' )."f -";
+            }
+            $prepscript .= qq(\nSTATUS=\$?\nif [ \$STATUS -ne 0 ]; then\n  exit \$STATUS\nfi\n);
             $prepscript .= "cd '$tarballdir'\n";
           } # $altsource == 2
         }
@@ -1145,8 +1170,8 @@ LINE: while (<SPECFILE>) {
         # Do this here since we don't use any URL forms elsewhere (maybe some other time)
         $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$1|;
         $pkgdata{sources}{0} = $pkgdata{main}{source};
-	# .tar, .tar.gz, .tar.bz2, .tgz, .xz
-        die "Unknown Source: header format $sval\n" if $sval !~ /\.(?:tar(?:\.(?:gz|bz2|xz))?|tgz)$/;
+	# .tar, .tar.gz, .tar.bz2, .tgz, .xz, .zip
+        die "Unknown Source: header format $sval\n" if $sval !~ /\.(?:tar(?:\.(?:gz|bz2|xz))?|tgz|zip)$/;
       } elsif (my ($srcnum, $src) = (/^source([0-9]+):\s*(.+)/i)) {
         $src =~ s/\s*$//;
         $pkgdata{sources}{$srcnum} = $src;
