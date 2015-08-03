@@ -367,14 +367,14 @@ if ($cmdopts{type} eq 't') {
   # collect some info about the tarball
   $specfile = "$topdir/BUILD/". qx { zcat $tarball |tar -t |grep -e '[\.]spec\$' };
   chomp $specfile;
-  my ($fileonly, $dirname) = ($tarball =~ /(([a-zA-Z0-9._-]+)\.tar\.(?:gz|bz2|xz))$/);
+  my ($fileonly, $dirname) = ($tarball =~ /(([a-zA-Z0-9._-]+)\.(?:tgz|tar\.(?:gz|bz2|xz|Z)))$/);
 
   $tarball = abs_path($tarball);
 ##fixme:  use macro expansions for the executables
   my $unpackcmd = "cd $topdir/BUILD; ".
-	( $tarball =~ /\.tar\.gz$/	 ? "/bin/gzip"   : "" ).
-	( $tarball =~ /\.tar\.bz2$/	 ? "/bin/bzip2"  : "" ).
-	( $tarball =~ /\.tar\.(?:gz|Z)$/ ? "/usr/bin/xz" : "" ).
+	( $tarball =~ /\.(?:tgz|tar\.(?:gz|Z))$/	 ? "/bin/gzip"   : "" ).
+	( $tarball =~ /\.tar\.bz2$/			 ? "/bin/bzip2"  : "" ).
+	( $tarball =~ /\.tar\.xz$/			 ? "/usr/bin/xz" : "" ).
 	" -dc $tarball |/bin/tar -xf -";
 
   system "$unpackcmd";
@@ -932,9 +932,9 @@ LINE: while (<SPECFILE>) {
 		"'$topdir/SOURCES/$pkgdata{main}{source}'";
           } else {
             $prepscript .=
-		( $pkgdata{main}{source} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
-		( $pkgdata{main}{source} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
-		( $pkgdata{main}{source} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
+		( $pkgdata{main}{source} =~ /\.(?:tgz|tar\.(?:gz|Z))$/	 ? "/bin/gzip"   : "" ).
+		( $pkgdata{main}{source} =~ /\.tar\.bz2$/		 ? "/bin/bzip2"  : "" ).
+		( $pkgdata{main}{source} =~ /\.tar\.xz$/		 ? "/usr/bin/xz" : "" ).
 		" -dc '$topdir/SOURCES/$pkgdata{main}{source}' | /bin/tar -x".
 		( $quietunpack ? '' : 'vv' )."f - ";
           }
@@ -951,9 +951,9 @@ LINE: while (<SPECFILE>) {
 		"'$topdir/SOURCES/$pkgdata{sources}{$snum}'";
             } else {
               $prepscript .=
-		( $pkgdata{sources}{$snum} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
-		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
-		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.(?:tgz|tar\.(?:gz|Z))$/ ? "/bin/gzip"   : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/		 ? "/bin/bzip2"  : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/		 ? "/usr/bin/xz" : "" ).
 		" -dc '$topdir/SOURCES/$pkgdata{sources}{$snum}' | /bin/tar -x".
 		( $quietunpack ? '' : 'vv' )."f -";
             }
@@ -968,9 +968,9 @@ LINE: while (<SPECFILE>) {
 		"'$topdir/SOURCES/$pkgdata{main}{source}'";
             } else {
               $prepscript .=
-		( $pkgdata{sources}{$snum} =~ /\.tar\.gz$/  ? "/bin/gzip"   : "" ).
-		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/ ? "/bin/bzip2"  : "" ).
-		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/  ? "/usr/bin/xz" : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.(?:tgz|tar\.(?:gz|Z))$/  ? "/bin/gzip"   : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.bz2$/		  ? "/bin/bzip2"  : "" ).
+		( $pkgdata{sources}{$snum} =~ /\.tar\.xz$/		  ? "/usr/bin/xz" : "" ).
 		" -dc '$topdir/SOURCES/$pkgdata{sources}{$snum}' | /bin/tar -x".
 		( $quietunpack ? '' : 'vv' )."f -";
             }
@@ -1170,8 +1170,8 @@ LINE: while (<SPECFILE>) {
         # Do this here since we don't use any URL forms elsewhere (maybe some other time)
         $pkgdata{main}{source} =~ s|^.+/([^/]+)$|$1|;
         $pkgdata{sources}{0} = $pkgdata{main}{source};
-	# .tar, .tar.gz, .tar.bz2, .tgz, .xz, .zip
-        die "Unknown Source: header format $sval\n" if $sval !~ /\.(?:tar(?:\.(?:gz|bz2|xz))?|tgz|zip)$/;
+	# .tar, .tar.gz, .tar.Z, .tar.bz2, .tar.xz, .tgz, .zip
+        die "Unknown Source: header format $sval\n" if $sval !~ /\.(?:tar(?:\.(?:gz|bz2|xz|Z))?|tgz|zip)$/;
       } elsif (my ($srcnum, $src) = (/^source([0-9]+):\s*(.+)/i)) {
         $src =~ s/\s*$//;
         $pkgdata{sources}{$srcnum} = $src;
@@ -2096,7 +2096,7 @@ debbuild - Build Debian-compatible .deb packages from RPM .spec files
 
  debbuild {-ba|-bb|-bp|-bc|-bi|-bl|-bs} [build-options] file.spec
 
- debbuild {-ta|-tb|-tp|-tc|-ti|-tl|-ts} [build-options] file.tar.{gz|bz2|xz}
+ debbuild {-ta|-tb|-tp|-tc|-ti|-tl|-ts} [build-options] file.{tgz|zip|tar.{gz|bz2|xz|Z}}
 
  debbuild --rebuild file.{src.rpm|sdeb}
 
