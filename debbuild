@@ -391,7 +391,7 @@ if ($cmdopts{type} eq 't') {
   my $unpackcmd = "cd $topdir/BUILD;\n";
   if ($tarball =~ /\.zip$/) {
     # .zip files are not really tarballs
-    $unpackcmd .= "/usr/bin/unzip -boa $tarball";
+    $unpackcmd .= "/usr/bin/unzip -boaq $tarball";
   } elsif ($tarball =~ /\.tar$/) {
     # plain .tar files don't need to be uncompressed
     $unpackcmd .= "/bin/tar -xf $tarball";
