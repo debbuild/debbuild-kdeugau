@@ -950,7 +950,6 @@ LINE: while (<SPECFILE>) {
 #   debbuild sets the global on the first call, and keeps using it for further %setup calls
 
         $prepscript .= "cd '$topdir/BUILD'\n";
-        $tarballdir = expandmacros($tarballdir,'gp');
         $prepscript .= "rm -rf '$tarballdir'\n" if $deldir;
         $prepscript .= "/bin/mkdir -p $tarballdir\n" if $changedir;
 
@@ -1033,6 +1032,8 @@ LINE: while (<SPECFILE>) {
             }
           } elsif ($popt =~ (/^-E/) ) {
             $noempty = 1;
+          } elsif ($popt =~ (/^(-[^s]+)/) ) {
+            die "Unknown \%patch option $1: $line\n";
           }
         } # while (shift @pbits)
 
@@ -2024,8 +2025,8 @@ sub expandmacros {
   if ($section =~ /g/) {
 
     $macrostring =~ s|%{_builddir}|%{_topdir}/BUILD|g;
-# no longer a valid macro/tag
-#    $macrostring =~ s|%{buildsubdir}|$tarballdir|g;
+# Not predefined in an eternal file;  defaults to %{name}-%{version}
+    $macrostring =~ s|%{buildsubdir}|$tarballdir|g;
     $macrostring =~ s|%{_topdir}|$topdir|g;
     $macrostring =~ s|%{_tmppath}|$tmpdir|g;
     $macrostring =~ s'%{_docdir}'%{_datadir}/doc'g;
