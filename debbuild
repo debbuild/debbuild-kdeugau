@@ -2129,7 +2129,7 @@ sub unpackcmd {
 
    if ($sourcedrop =~ /\.zip$/) {
       # .zip files are not really tarballs
-      $cmdstring .= "/usr/bin/unzip -o".
+      $cmdstring .= "/usr/bin/unzip".
          ( $quietunpack ? ' -qq ' : ' ' ).
          "'$topdir/SOURCES/$sourcedrop'";
    } elsif ($sourcedrop =~ /\.tar$/) {
